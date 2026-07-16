@@ -173,7 +173,7 @@ fn write_transformer(packets: &[Packet]) -> anyhow::Result<()> {
 
                 match_arms.extend(quote! {
                     chunkedge_protocol::packets::#lowercase_state::#name::ID => {
-                        Ok(format!("{:#?}", chunkedge_protocol::packets::#lowercase_state::#name::decode(&mut data)?))
+                        chunkedge_protocol::packets::#lowercase_state::#name::decode(&mut data).map(|p| format!("{:#?}", p))
                     }
                 });
             }
@@ -215,7 +215,7 @@ fn write_transformer(packets: &[Packet]) -> anyhow::Result<()> {
                 #generated
             };
             debug::dump_packet_trace(res.is_err());
-            res
+            Ok(res?)
         }
     };
 
