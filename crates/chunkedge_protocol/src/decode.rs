@@ -224,16 +224,26 @@ impl PacketFrame {
 
         let mut r = &self.body[..];
 
-        let pkt = P::decode(&mut r)?;
+        #[cfg(any(feature = "debug-packets", feature = "debug-packets-on-error"))]
+        crate::debug::enable_packet_recording(P::NAME, P::ID, r);
 
-        ensure!(
-            r.is_empty(),
-            "missed {} bytes while decoding '{}'",
-            r.len(),
-            P::NAME
-        );
+        let pkt_res = P::decode(&mut r).and_then(|pkt| {
+            ensure!(
+                r.is_empty(),
+                "missed {} bytes while decoding '{}'",
+                r.len(),
+                P::NAME
+            );
+            Ok(pkt)
+        });
 
-        Ok(pkt)
+        #[cfg(any(feature = "debug-packets", feature = "debug-packets-on-error"))]
+        {
+            let has_error = pkt_res.is_err();
+            crate::debug::dump_packet_trace(has_error)
+        };
+
+        pkt_res
     }
 }
 
