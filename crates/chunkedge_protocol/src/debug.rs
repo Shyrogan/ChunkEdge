@@ -1,9 +1,5 @@
 //! Packet decode tracing for debugging purposes.
 //!
-//! Enabled by the `debug-packets` cargo feature. All public items in this
-//! module are `#[doc(hidden)]` and considered internal API — they are called
-//! exclusively by macro-generated code and the [`super::decode`] entry point.
-//!
 //! # How it works
 //!
 //! 1. Before decoding starts, [`enable_packet_recording`] stores the base

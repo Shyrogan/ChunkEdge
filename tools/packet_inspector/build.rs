@@ -210,9 +210,12 @@ fn write_transformer(packets: &[Packet]) -> anyhow::Result<()> {
             let bytes = packet.data.as_ref().unwrap();
             let mut data = &bytes.clone()[..];
 
-            match packet.side {
+            debug::enable_packet_recording(packet.name, packet.id, data);
+            let res = match packet.side {
                 #generated
-            }
+            };
+            debug::dump_packet_trace(res.is_err());
+            res
         }
     };
 

@@ -4,6 +4,8 @@ use anyhow::{bail, ensure, Context};
 use bytes::{Buf, BytesMut};
 use chunkedge_binary::{Decode, VarInt, VarIntDecodeError};
 
+#[cfg(any(feature = "debug-packets", feature = "debug-packets-on-error"))]
+use crate::debug;
 #[cfg(feature = "compression")]
 use crate::CompressionThreshold;
 use crate::{Packet, MAX_PACKET_SIZE};
@@ -225,7 +227,7 @@ impl PacketFrame {
         let mut r = &self.body[..];
 
         #[cfg(any(feature = "debug-packets", feature = "debug-packets-on-error"))]
-        crate::debug::enable_packet_recording(P::NAME, P::ID, r);
+        debug::enable_packet_recording(P::NAME, P::ID, r);
 
         let pkt_res = P::decode(&mut r).and_then(|pkt| {
             ensure!(
@@ -240,7 +242,7 @@ impl PacketFrame {
         #[cfg(any(feature = "debug-packets", feature = "debug-packets-on-error"))]
         {
             let has_error = pkt_res.is_err();
-            crate::debug::dump_packet_trace(has_error)
+            debug::dump_packet_trace(has_error)
         };
 
         pkt_res
