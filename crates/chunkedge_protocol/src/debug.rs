@@ -145,6 +145,17 @@ fn clean_type(raw: &str) -> String {
     raw.replace(" < ", "<").replace(" >", ">")
 }
 
+/// Truncate a string to a maximum number of bytes, ensuring that the result
+/// ends at a valid UTF-8 character boundary. Otherwise, we could panic when
+/// printing the string if it ends in the middle of a multi-byte character.
+fn truncate_at_char_boundary(value: &str, max_bytes: usize) -> &str {
+    let mut end = value.len().min(max_bytes);
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    &value[..end]
+}
+
 fn print_node(node: &DecodeNode, indent_level: usize) {
     let indent = "  ".repeat(indent_level);
     let name = node.field_name.as_deref().unwrap_or("?");
@@ -280,7 +291,7 @@ pub fn log_field_success(
                         let ct = clean_type(type_name);
                         format!("{ct} {{ ... }}")
                     } else {
-                        format!("{}...", &val_pretty[..497])
+                        format!("{}...", truncate_at_char_boundary(&val_pretty, 497))
                     }
                 } else {
                     val_pretty
