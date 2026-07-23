@@ -27,10 +27,10 @@ impl View for FailedPackets {
             .stick_to_bottom(!state.update_scroll)
             .show(ui, |ui| {
                 for (packet, i) in packets.iter() {
-                    if let Some(filtered) = state.packet_filter.get(packet) {
-                        if !filtered {
-                            continue;
-                        }
+                    if let Some(filtered) = state.packet_filter.get(packet)
+                        && !filtered
+                    {
+                        continue;
                     }
 
                     let selected = {
