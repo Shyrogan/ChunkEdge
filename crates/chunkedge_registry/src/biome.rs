@@ -14,7 +14,8 @@ use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use chunkedge_ident::{Ident, ident};
 use chunkedge_nbt::serde::ser::CompoundSerializer;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::BTreeMap;
 use tracing::error;
 
 use crate::codec::{RegistryCodec, RegistryValue};
@@ -116,6 +117,11 @@ pub struct Biome {
     pub temperature: f32,
     pub downfall: f32,
     pub effects: BiomeEffects,
+    /// Environment attributes introduced in 26.1 (visual colors, audio, …).
+    /// These are preserved verbatim in the login codec, but are not
+    /// re-serialized if the registry is mutated at runtime.
+    #[serde(default, skip_serializing)]
+    pub attributes: BTreeMap<String, serde::de::IgnoredAny>,
 }
 
 impl Default for Biome {
@@ -126,6 +132,33 @@ impl Default for Biome {
             temperature: 0.8,
             downfall: 0.4,
             effects: BiomeEffects::default(),
+            attributes: BTreeMap::new(),
+        }
+    }
+}
+
+/// Deserializes a color that is either a packed `u32` (legacy) or a
+/// `"#rrggbb"` hex string (26.1+).
+fn deserialize_color<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrInt {
+        Int(u32),
+        Str(String),
+    }
+
+    let helper = Option::<StringOrInt>::deserialize(deserializer)?;
+    match helper {
+        None => Ok(None),
+        Some(StringOrInt::Int(i)) => Ok(Some(i)),
+        Some(StringOrInt::Str(s)) => {
+            let hex = s.strip_prefix('#').unwrap_or(&s);
+            u32::from_str_radix(hex, 16)
+                .map(Some)
+                .map_err(serde::de::Error::custom)
         }
     }
 }
@@ -142,17 +175,17 @@ pub struct BiomeEffects {
     pub music_volume: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub particle: Option<BiomeParticle>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
     pub sky_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
     pub foliage_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
     pub grass_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
     pub fog_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
     pub water_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
     pub water_fog_color: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grass_color_modifier: Option<String>,
