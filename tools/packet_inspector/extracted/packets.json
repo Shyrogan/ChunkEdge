@@ -648,7 +648,7 @@
     "id": 61
   },
   {
-    "name": "spectate_entity",
+    "name": "spectator_action",
     "phase": "play",
     "side": "serverbound",
     "id": 62

@@ -2,6 +2,7 @@ package com.chunkedge.extractor.extractors;
 
 import com.chunkedge.extractor.ClassComparator;
 import com.chunkedge.extractor.DummyPlayerEntity;
+import com.chunkedge.extractor.LegacyNames;
 import com.chunkedge.extractor.Main;
 import com.google.gson.*;
 import com.mojang.authlib.GameProfile;
@@ -21,6 +22,7 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
@@ -367,7 +369,7 @@ public class Entities implements Main.Extractor {
             Class<? extends Entity>,
             EntityType<?>
         >();
-        for (var f : EntityType.class.getFields()) {
+        for (var f : EntityTypes.class.getFields()) {
             if (f.getType().equals(EntityType.class)) {
                 var entityClass = (Class<? extends Entity>) ((ParameterizedType) f.getGenericType())
                     .getActualTypeArguments()[0];
@@ -400,7 +402,7 @@ public class Entities implements Main.Extractor {
             // the data tracker field from the base entity class.
             // We also handle player entities specially since they cannot be spawned with
             // EntityType#create.
-            final var entityInstance = entityType.equals(EntityType.PLAYER)
+            final var entityInstance = entityType.equals(EntityTypes.PLAYER)
                 ? new DummyPlayerEntity(world, new GameProfile(UUID.randomUUID(), "cooldude"))
                 : entityType.create(world, EntitySpawnReason.COMMAND);
 
@@ -416,7 +418,10 @@ public class Entities implements Main.Extractor {
                     null != parent && Entity.class.isAssignableFrom(parent);
 
                 if (hasParent) {
-                    entityJson.addProperty("parent", parent.getSimpleName());
+                    entityJson.addProperty(
+                        "parent",
+                        LegacyNames.className(parent.getSimpleName())
+                    );
                 }
 
                 if (null != entityType) {
@@ -445,14 +450,28 @@ public class Entities implements Main.Extractor {
                         );
 
                         var fieldJson = new JsonObject();
-                        var fieldName = entityField
+                        var officialFieldName = entityField
                             .getName()
                             .toLowerCase(Locale.ROOT);
+                        // Keep the legacy (1.21.5-era) JSON keys so the
+                        // generated Rust API stays stable across versions.
+                        var ownerName = entityClass.getSimpleName();
+                        var fieldName = LegacyNames.fieldName(
+                            ownerName,
+                            officialFieldName
+                        );
                         fieldJson.addProperty("name", fieldName);
                         fieldJson.addProperty("index", trackedData.id());
 
                         var data = trackedDataToJson(trackedData, dataTracker);
-                        fieldJson.addProperty("type", data.left());
+                        var legacyType = LegacyNames.fieldTypeOrNull(
+                            ownerName,
+                            officialFieldName
+                        );
+                        fieldJson.addProperty(
+                            "type",
+                            legacyType != null ? legacyType : data.left()
+                        );
                         fieldJson.add("default_value", data.right());
 
                         fieldsJson.add(fieldJson);
@@ -526,7 +545,10 @@ public class Entities implements Main.Extractor {
 
         var entitiesJson = new JsonObject();
         for (var entry : entitiesMap.entrySet()) {
-            entitiesJson.add(entry.getKey().getSimpleName(), entry.getValue());
+            entitiesJson.add(
+                LegacyNames.className(entry.getKey().getSimpleName()),
+                entry.getValue()
+            );
         }
 
         return entitiesJson;

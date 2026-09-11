@@ -1,6 +1,7 @@
 package com.chunkedge.extractor.extractors;
 
 import com.chunkedge.extractor.Main;
+import com.chunkedge.extractor.LegacyNames;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.lang.reflect.Modifier;
@@ -59,7 +60,9 @@ public class Misc implements Main.Extractor {
                 field.get(null) instanceof Byte code
             ) {
                 entityStatusJson.addProperty(
-                    field.getName().toLowerCase(Locale.ROOT),
+                    LegacyNames.statusName(
+                        field.getName().toLowerCase(Locale.ROOT)
+                    ),
                     code
                 );
             }
@@ -75,7 +78,9 @@ public class Misc implements Main.Extractor {
                 field.get(null) instanceof Integer i
             ) {
                 entityAnimationJson.addProperty(
-                    field.getName().toLowerCase(Locale.ROOT),
+                    LegacyNames.animationName(
+                        field.getName().toLowerCase(Locale.ROOT)
+                    ),
                     i
                 );
             }
