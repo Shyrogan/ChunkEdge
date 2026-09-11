@@ -22,6 +22,7 @@ pub mod encode;
 pub mod game_mode;
 mod global_pos;
 mod hand;
+pub mod lp_vec3;
 pub mod movement_flags;
 pub mod packets;
 pub mod profile;
@@ -63,6 +64,7 @@ pub use game_mode::GameMode;
 pub use global_pos::GlobalPos;
 pub use hand::Hand;
 pub use ident::ident;
+pub use lp_vec3::LpVec3;
 pub use packets::play::level_particles_s2c::Particle;
 use serde::{Deserialize, Serialize};
 pub use sound::Sound;
@@ -74,11 +76,11 @@ pub use velocity::Velocity;
 pub const MAX_PACKET_SIZE: i32 = 2_i32.pow(21) - 1; // (the maximum that can be sent in a 3-byte VarInt)
 
 /// The Minecraft protocol version this library currently targets.
-pub const PROTOCOL_VERSION: i32 = 770;
+pub const PROTOCOL_VERSION: i32 = 775;
 
 /// The stringified name of the Minecraft version this library currently
 /// targets.
-pub const MINECRAFT_VERSION: &str = "1.21.5";
+pub const MINECRAFT_VERSION: &str = "26.1";
 
 /// How large a packet should be before it is compressed by the packet encoder.
 ///
