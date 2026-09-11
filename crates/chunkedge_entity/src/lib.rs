@@ -580,6 +580,60 @@ pub enum ChickenKind {
     Warm,
 }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug, Encode, Decode)]
+pub enum CatSoundKind {
+    #[default]
+    Classic,
+    Royal,
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug, Encode, Decode)]
+pub enum ChickenSoundKind {
+    #[default]
+    Classic,
+    Picky,
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug, Encode, Decode)]
+pub enum CowSoundKind {
+    #[default]
+    Classic,
+    Moody,
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug, Encode, Decode)]
+pub enum PigSoundKind {
+    Big,
+    #[default]
+    Classic,
+    Mini,
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug, Encode, Decode)]
+pub enum ZombieNautilusKind {
+    #[default]
+    Temperate,
+    Warm,
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug, Encode, Decode)]
+pub enum WeatheringCopperState {
+    #[default]
+    Unaffected,
+    Exposed,
+    Weathered,
+    Oxidized,
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug, Encode, Decode)]
+pub enum CopperGolemState {
+    #[default]
+    Idle,
+    GettingItem,
+    GettingNoItem,
+    DroppingItem,
+    DroppingNoItem,
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug, Encode, Decode)]
+pub enum HumanoidArm {
+    Left,
+    #[default]
+    Right,
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug, Encode, Decode)]
 pub enum PaintingKind {
     #[default]
     Alban,
