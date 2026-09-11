@@ -1,6 +1,6 @@
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
-use chunkedge_entity::entity::Flags;
+use chunkedge_entity::entity::DataSharedFlagsId as Flags;
 use chunkedge_entity::{Pose, entity};
 use chunkedge_protocol::packets::play::PlayerCommandC2s;
 pub use chunkedge_protocol::packets::play::player_command_c2s::PlayerCommand;
@@ -65,7 +65,7 @@ pub struct LeaveBedMessage {
 
 fn handle_client_command(
     mut packets: MessageReader<PacketMessage>,
-    mut clients: Query<(&mut entity::Pose, &mut Flags)>,
+    mut clients: Query<(&mut entity::DataPose, &mut Flags)>,
     mut sprinting_messages: MessageWriter<SprintMessage>,
     mut sneaking_messages: MessageWriter<SneakMessage>,
     mut jump_with_horse_messages: MessageWriter<JumpWithHorseMessage>,

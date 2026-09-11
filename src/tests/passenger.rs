@@ -1,8 +1,8 @@
 use bevy_ecs::prelude::*;
 use chunkedge_server::Hand;
-use chunkedge_server::entity::pig::PigEntity;
+use chunkedge_server::entity::pig::Pig;
 use chunkedge_server::entity::{EntityId, EntityLayerId, Position};
-use chunkedge_server::interact_entity::{EntityInteraction, InteractEntityMessage};
+use chunkedge_server::interact_entity::InteractEntityMessage;
 use chunkedge_server::passenger::{Passengers, Riding};
 use chunkedge_server::protocol::VarInt;
 use chunkedge_server::protocol::packets::play::{InteractC2s, SetPassengersS2c};
@@ -24,7 +24,7 @@ fn passengers_broadcast_on_mount_and_dismount() {
     let vehicle = app
         .world_mut()
         .spawn((
-            PigEntity,
+            Pig,
             EntityLayerId(layer),
             Position::new([0.0, 64.0, 0.0]),
         ))
@@ -88,11 +88,11 @@ fn passengers_sent_when_vehicle_enters_view() {
 
     let vehicle = app
         .world_mut()
-        .spawn((PigEntity, EntityLayerId(layer), Position::new(far)))
+        .spawn((Pig, EntityLayerId(layer), Position::new(far)))
         .id();
     let rider = app
         .world_mut()
-        .spawn((PigEntity, EntityLayerId(layer), Position::new(far)))
+        .spawn((Pig, EntityLayerId(layer), Position::new(far)))
         .id();
     app.world_mut().entity_mut(rider).insert(Riding(vehicle));
 
@@ -128,9 +128,6 @@ fn toggle_ride(
     riders: Query<Has<Riding>>,
 ) {
     for message in messages.read() {
-        if !matches!(message.interact, EntityInteraction::Interact(_)) {
-            continue;
-        }
         if vehicles.get(message.entity).is_err() {
             continue;
         }
@@ -166,7 +163,7 @@ fn right_click_interaction_mounts_the_client() {
     let vehicle = app
         .world_mut()
         .spawn((
-            PigEntity,
+            Pig,
             EntityLayerId(layer),
             Position::new([0.0, 64.0, 0.0]),
             Vehicle,
@@ -179,7 +176,10 @@ fn right_click_interaction_mounts_the_client() {
 
     helper.send(&InteractC2s {
         entity_id: VarInt(vehicle_id),
-        interact: EntityInteraction::Interact(Hand::Main),
+        hand: Hand::Main,
+        target: chunkedge_server::protocol::LpVec3(chunkedge_server::math::DVec3::new(
+            0.0, 0.0, 0.0,
+        )),
         sneaking: false,
     });
 

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use chunkedge::entity::breeze::BreezeEntity;
-use chunkedge::entity::cat::{self, CatEntity};
-use chunkedge::entity::enderman::{self, EndermanEntity};
-use chunkedge::entity::frog::FrogEntity;
-use chunkedge::entity::painting::{self, PaintingEntity};
-use chunkedge::entity::player::PlayerEntity;
-use chunkedge::entity::warden::WardenEntity;
-use chunkedge::entity::zombie::ZombieEntity;
+use chunkedge::entity::breeze::Breeze;
+use chunkedge::entity::cat::{self, Cat};
+use chunkedge::entity::ender_man::{self, EnderMan};
+use chunkedge::entity::frog::Frog;
+use chunkedge::entity::painting::{self, Painting};
+use chunkedge::entity::player::Player;
+use chunkedge::entity::warden::Warden;
+use chunkedge::entity::zombie::Zombie;
 use chunkedge::entity::{
     CatKind, EntityLayerId, ObjectData, OnGround, PaintingKind, PaintingVariantDefinition, Pose,
     entity,
@@ -89,17 +89,17 @@ impl MobDemo {
                         layer,
                         Look::new(DEMO_ENTITY_YAW, 0.0),
                         HeadYaw(DEMO_ENTITY_YAW),
-                        entity::Pose(pose),
+                        entity::DataPose(pose),
                     ))
                     .id()
             };
         }
 
         match self {
-            Self::Breeze => spawn_entity!(BreezeEntity),
-            Self::Frog => spawn_entity!(FrogEntity),
-            Self::Warden => spawn_entity!(WardenEntity),
-            Self::Zombie => spawn_entity!(ZombieEntity),
+            Self::Breeze => spawn_entity!(Breeze),
+            Self::Frog => spawn_entity!(Frog),
+            Self::Warden => spawn_entity!(Warden),
+            Self::Zombie => spawn_entity!(Zombie),
         }
     }
 }
@@ -417,12 +417,12 @@ fn spawn_cat_variant(
 ) -> Entity {
     commands
         .spawn((
-            CatEntity,
+            Cat,
             layer,
             position,
             Look::new(DEMO_ENTITY_YAW, 0.0),
             HeadYaw(DEMO_ENTITY_YAW),
-            cat::CatVariant(variant),
+            cat::DataVariantId(variant),
         ))
         .id()
 }
@@ -435,11 +435,11 @@ fn spawn_painting_variant(
 ) -> Entity {
     commands
         .spawn((
-            PaintingEntity,
+            Painting,
             layer,
             Position::new((position.0.x, position.0.y + 1.0, position.0.z)),
             ObjectData(2),
-            painting::Variant(variant),
+            painting::DataPaintingVariantId(variant),
         ))
         .id()
 }
@@ -459,12 +459,12 @@ fn spawn_enderman(
 
     commands
         .spawn((
-            EndermanEntity,
+            EnderMan,
             layer,
             position,
             Look::new(DEMO_ENTITY_YAW, 0.0),
             HeadYaw(DEMO_ENTITY_YAW),
-            enderman::CarriedBlock(carried_block),
+            ender_man::DataCarryState(carried_block),
         ))
         .id()
 }
@@ -592,13 +592,13 @@ fn spawn_player_npc(
 
     commands
         .spawn((
-            PlayerEntity,
+            Player,
             npc.uuid,
             layer,
             station.spawn_pos,
             Look::new(DEMO_ENTITY_YAW, 0.0),
             HeadYaw(DEMO_ENTITY_YAW),
-            entity::Pose(pose),
+            entity::DataPose(pose),
         ))
         .id()
 }

@@ -2,8 +2,8 @@
 
 const SPAWN_Y: i32 = 64;
 
-use chunkedge::entity::armor_stand::ArmorStandEntity;
-use chunkedge::entity::zombie::ZombieEntity;
+use chunkedge::entity::armor_stand::ArmorStand;
+use chunkedge::entity::zombie::Zombie;
 use chunkedge::equipment::{EquipmentInteractionBroadcast, EquipmentInventorySync};
 use chunkedge::prelude::*;
 use chunkedge::protocol::packets::play::set_equipment_s2c::EquipmentSlot;
@@ -50,13 +50,13 @@ fn setup(
     let layer_id = commands.spawn(layer).id();
 
     commands.spawn((
-        ZombieEntity,
+        Zombie,
         Position::new(DVec3::new(0.0, f64::from(SPAWN_Y) + 1.0, 0.0)),
         EntityLayerId(layer_id),
     ));
 
     commands.spawn((
-        ArmorStandEntity,
+        ArmorStand,
         Position::new(DVec3::new(1.0, f64::from(SPAWN_Y) + 1.0, 0.0)),
         EntityLayerId(layer_id),
     ));

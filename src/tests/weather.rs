@@ -25,13 +25,10 @@ fn test_client_initialization_on_join() {
         .filter_map(|f| f.decode::<GameEventS2c>().ok())
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        game_event_frames[0],
-        GameEventS2c {
-            kind: GameEventKind::StartWaitingForLevelChunks,
-            value: 0.0,
-        }
-    );
+    assert_eq!(game_event_frames[0], GameEventS2c {
+        kind: GameEventKind::StartWaitingForLevelChunks,
+        value: 0.0,
+    });
 
     // Check that we have rain and thunder packets in any order
     let rain_packet = GameEventS2c {
@@ -78,13 +75,10 @@ fn test_chunk_layer_initialization_on_join() {
         .filter_map(|f| f.decode::<GameEventS2c>().ok())
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        game_event_frames[0],
-        GameEventS2c {
-            kind: GameEventKind::StartWaitingForLevelChunks,
-            value: 0.0,
-        }
-    );
+    assert_eq!(game_event_frames[0], GameEventS2c {
+        kind: GameEventKind::StartWaitingForLevelChunks,
+        value: 0.0,
+    });
 
     // The order of the rain and thunder packet is non-deterministic if applied to
     // the chunk layer (for some reason)

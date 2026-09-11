@@ -1,6 +1,6 @@
 use chunkedge_inventory::{HeldItem, Inventory, PlayerAction};
 use chunkedge_server::ItemKind;
-use chunkedge_server::entity::living::LivingFlags;
+use chunkedge_server::entity::living::DataLivingEntityFlags as LivingFlags;
 use chunkedge_server::event_loop::PacketMessage;
 use chunkedge_server::interact_item::InteractItemMessage;
 use chunkedge_server::protocol::packets::play::PlayerActionC2s;

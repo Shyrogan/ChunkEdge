@@ -3,7 +3,7 @@
 use std::f64::consts::TAU;
 
 use chunkedge::abilities::{PlayerStartFlyingMessage, PlayerStopFlyingMessage};
-use chunkedge::entity::cow::CowEntity;
+use chunkedge::entity::cow::Cow;
 use chunkedge::math::{DQuat, EulerRot};
 use chunkedge::message::SendMessage;
 use chunkedge::prelude::*;
@@ -55,7 +55,7 @@ fn setup(
 
     let layer_id = commands.spawn(layer).id();
 
-    commands.spawn_batch([(CowEntity, EntityLayerId(layer_id), SpherePart); SPHERE_AMOUNT]);
+    commands.spawn_batch([(Cow, EntityLayerId(layer_id), SpherePart); SPHERE_AMOUNT]);
 }
 
 fn init_clients(

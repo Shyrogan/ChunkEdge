@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 
 use bevy_ecs::query::QueryData;
-use chunkedge::entity::cow::CowEntity;
-use chunkedge::entity::entity::Flags;
-use chunkedge::entity::living::Health;
-use chunkedge::entity::pig::PigEntity;
-use chunkedge::entity::player::PlayerEntity;
+use chunkedge::entity::cow::Cow;
+use chunkedge::entity::entity::DataSharedFlagsId;
+use chunkedge::entity::living::DataHealthId;
+use chunkedge::entity::pig::Pig;
+use chunkedge::entity::player::Player;
 use chunkedge::entity::{EntityAnimations, EntityStatuses, OnGround, Velocity};
 use chunkedge::interact_block::InteractBlockMessage;
 use chunkedge::inventory::HeldItem;
@@ -139,10 +139,10 @@ fn setup(
     let ctf_team_layers = CtfLayers::init(&mut commands, &server);
 
     // add some debug entities to the ctf entity layers
-    let mut flags = Flags::default();
+    let mut flags = DataSharedFlagsId::default();
     flags.set_glowing(true);
     let mut pig = commands.spawn((
-        PigEntity,
+        Pig,
         EntityLayerId(ctf_team_layers.friendly_layers[&Team::Red]),
         Position([-30.0, 65.0, 2.0].into()),
         flags.clone(),
@@ -150,7 +150,7 @@ fn setup(
     pig.insert(Team::Red);
 
     let mut cow = commands.spawn((
-        CowEntity,
+        Cow,
         EntityLayerId(ctf_team_layers.friendly_layers[&Team::Blue]),
         Position([30.0, 65.0, 2.0].into()),
         flags,
@@ -369,7 +369,7 @@ fn init_clients(
             &mut VisibleEntityLayers,
             &mut Position,
             &mut GameMode,
-            &mut Health,
+            &mut DataHealthId,
         ),
         Added<Client>,
     >,
@@ -655,10 +655,10 @@ fn do_team_selector_portals(
             ent_layers.as_mut().0.insert(friendly_layer);
 
             // Copy the player entity to the friendly layer, and make them glow.
-            let mut flags = Flags::default();
+            let mut flags = DataSharedFlagsId::default();
             flags.set_glowing(true);
             let mut player_glowing = commands.spawn((
-                PlayerEntity,
+                Player,
                 EntityLayerId(friendly_layer),
                 *unique_id,
                 flags,
@@ -668,7 +668,7 @@ fn do_team_selector_portals(
 
             let enemy_layer = ctf_layers.enemy_layers[&team];
             let mut player_enemy =
-                commands.spawn((PlayerEntity, EntityLayerId(enemy_layer), *unique_id, *pos));
+                commands.spawn((Player, EntityLayerId(enemy_layer), *unique_id, *pos));
             player_enemy.insert(ClonedEntity(player));
         }
     }
@@ -936,7 +936,7 @@ struct CombatQuery {
     pos: &'static Position,
     state: &'static mut CombatState,
     statuses: &'static mut EntityStatuses,
-    health: &'static mut Health,
+    health:  &'static mut DataHealthId,
     inventory: &'static Inventory,
     held_item: &'static HeldItem,
     team: &'static Team,
@@ -1006,8 +1006,8 @@ fn handle_combat_messages(
 
         attacker.state.has_bonus_knockback = false;
 
-        victim.client.trigger_status(EntityStatus::PlayAttackSound);
-        victim.statuses.trigger(EntityStatus::PlayAttackSound);
+        victim.client.trigger_status(EntityStatus::StartAttacking);
+        victim.statuses.trigger(EntityStatus::StartAttacking);
 
         let stack = attacker.inventory.slot(attacker.held_item.slot());
 
@@ -1037,7 +1037,7 @@ fn necromancy(
         &mut VisibleChunkLayer,
         &mut RespawnPosition,
         &Team,
-        &mut Health,
+        &mut DataHealthId,
     )>,
     mut messages: MessageReader<RequestRespawnMessage>,
     layers: Query<Entity, (With<ChunkLayer>, With<EntityLayer>)>,

@@ -1,4 +1,4 @@
-use chunkedge::entity::player::PlayerEntity;
+use chunkedge::entity::player::Player;
 use chunkedge::player_list::{DisplayName, Listed, PlayerListEntryBundle};
 use chunkedge::prelude::*;
 use chunkedge::text::IntoText;
@@ -47,7 +47,7 @@ fn setup(
     let npc_id = UniqueId::default();
 
     commands.spawn((
-        PlayerEntity,
+        Player,
         EntityLayerId(layer_id),
         npc_id,
         Position::new((0.0, f64::from(SPAWN_Y) + 1.0, 6.0)),

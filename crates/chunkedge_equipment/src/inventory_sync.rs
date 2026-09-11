@@ -1,6 +1,6 @@
 use chunkedge_inventory::player_inventory::PlayerInventory;
 use chunkedge_inventory::{HeldItem, Inventory, UpdateSelectedSlotMessage};
-use chunkedge_server::entity::player::PlayerEntity;
+use chunkedge_server::entity::player::Player;
 
 use super::*;
 
@@ -20,7 +20,7 @@ pub(crate) fn equipment_inventory_sync(
         (
             Or<(Changed<Equipment>, Changed<Inventory>, Changed<HeldItem>)>,
             With<EquipmentInventorySync>,
-            With<PlayerEntity>,
+            With<Player>,
         ),
     >,
 ) {
@@ -80,7 +80,7 @@ pub(crate) fn equipment_held_item_sync_from_client(
 }
 
 pub(crate) fn on_attach_inventory_sync(
-    entities: Query<Option<&PlayerEntity>, (Added<EquipmentInventorySync>, With<Inventory>)>,
+    entities: Query<Option<&Player>, (Added<EquipmentInventorySync>, With<Inventory>)>,
 ) {
     for entity in &entities {
         if entity.is_none() {

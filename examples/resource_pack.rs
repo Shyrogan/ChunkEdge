@@ -1,10 +1,12 @@
 #![allow(clippy::type_complexity)]
 
-use chunkedge::entity::sheep::SheepEntity;
+use chunkedge::entity::sheep::Sheep;
 use chunkedge::message::SendMessage;
 use chunkedge::prelude::*;
+use chunkedge::protocol::packets::play::attack_c2s::AttackC2s;
 use chunkedge::protocol::packets::play::resource_pack_c2s::ResourcePackStatus;
 use chunkedge::resource_pack::ResourcePackStatusMessage;
+use chunkedge_server::event_loop::PacketMessage;
 
 const SPAWN_Y: i32 = 64;
 
@@ -47,7 +49,7 @@ fn setup(
     let layer_ent = commands.spawn(layer).id();
 
     commands.spawn((
-        SheepEntity,
+        Sheep,
         EntityLayerId(layer_ent),
         Position::new([0.0, f64::from(SPAWN_Y) + 1.0, 2.0]),
         Look::new(180.0, 0.0),
@@ -92,12 +94,15 @@ fn init_clients(
 
 fn prompt_on_punch(
     mut clients: Query<&mut Client>,
-    mut messages: MessageReader<InteractEntityMessage>,
+    mut packets: MessageReader<PacketMessage>,
 ) {
-    for message in messages.read() {
-        if let Ok(mut client) = clients.get_mut(message.client)
-            && message.interact == EntityInteraction::Attack
-        {
+    for packet in packets.read() {
+        // In 26.1 attacks arrive as their own packet rather than as an
+        // interaction variant.
+        if packet.decode::<AttackC2s>().is_none() {
+            continue;
+        }
+        if let Ok(mut client) = clients.get_mut(packet.client) {
             client.set_resource_pack(
                 "https://github.com/ChunkEdge/ChunkEdge/raw/main/assets/example_pack.zip",
                 "d7c6108849fb190ec2a49f2d38b7f1f897d9ce9f",
