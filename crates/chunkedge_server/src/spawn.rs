@@ -132,6 +132,8 @@ pub(super) fn initial_join(
             portal_cooldown: VarInt(spawn.portal_cooldown.0),
             do_limited_crafting: false, // TODO
             dimension_type: VarInt(dimension_type.get_value().into()),
+            // TODO: picks up the actual connection mode instead of assuming online.
+            online_mode: true,
             enforeces_secure_chat: true,
             // FIXME: add missing sea_level
             sea_level: VarInt(0),
