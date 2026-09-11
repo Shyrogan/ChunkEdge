@@ -160,7 +160,7 @@ fn update_constant_hitbox(
             EntityKind::ELDER_GUARDIAN => [1.9975, 1.9975, 1.9975],
             EntityKind::END_CRYSTAL => [2.0, 2.0, 2.0],
             EntityKind::ENDER_DRAGON => [16.0, 8.0, 16.0],
-            EntityKind::ENDER_MAN => [0.6, 2.9, 0.6],
+            EntityKind::ENDERMAN => [0.6, 2.9, 0.6],
             EntityKind::ENDERMITE => [0.4, 0.3, 0.4],
             EntityKind::EVOKER => [0.6, 1.95, 0.6],
             EntityKind::EVOKER_FANGS => [0.5, 0.8, 0.5],
@@ -175,22 +175,22 @@ fn update_constant_hitbox(
             EntityKind::ILLUSIONER => [0.6, 1.95, 0.6],
             EntityKind::IRON_GOLEM => [1.4, 2.7, 1.4],
             EntityKind::ITEM => [0.25, 0.25, 0.25],
-            EntityKind::LARGE_FIREBALL => [1.0, 1.0, 1.0],
-            EntityKind::LEASH_FENCE_KNOT => [0.375, 0.5, 0.375],
-            EntityKind::LIGHTNING_BOLT /* | EntityKind::MARKER - marker hitbox */ => [0.0; 3],
+            EntityKind::FIREBALL => [1.0, 1.0, 1.0],
+            EntityKind::LEASH_KNOT => [0.375, 0.5, 0.375],
+            EntityKind::LIGHTNING /* | EntityKind::MARKER - marker hitbox */ => [0.0; 3],
             EntityKind::LLAMA_SPIT => [0.25, 0.25, 0.25],
             EntityKind::MINECART
-            | EntityKind::MINECART_CHEST
-            | EntityKind::MINECART_TNT
-            | EntityKind::MINECART_HOPPER
-            | EntityKind::MINECART_FURNACE
-            | EntityKind::MINECART_SPAWNER
-            | EntityKind::MINECART_COMMAND_BLOCK => [0.98, 0.7, 0.98],
+            | EntityKind::CHEST_MINECART
+            | EntityKind::TNT_MINECART
+            | EntityKind::HOPPER_MINECART
+            | EntityKind::FURNACE_MINECART
+            | EntityKind::SPAWNER_MINECART
+            | EntityKind::COMMAND_BLOCK_MINECART => [0.98, 0.7, 0.98],
             EntityKind::PARROT => [0.5, 0.9, 0.5],
             EntityKind::PHANTOM => [0.9, 0.5, 0.9],
             EntityKind::PIGLIN_BRUTE => [0.6, 1.95, 0.6],
             EntityKind::PILLAGER => [0.6, 1.95, 0.6],
-            EntityKind::PRIMED_TNT => [0.98, 0.98, 0.98],
+            EntityKind::TNT => [0.98, 0.98, 0.98],
             EntityKind::PUFFERFISH => [0.7, 0.7, 0.7],
             EntityKind::RAVAGER => [1.95, 2.2, 1.95],
             EntityKind::SALMON => [0.7, 0.4, 0.7],
@@ -200,19 +200,19 @@ fn update_constant_hitbox(
             EntityKind::SNOW_GOLEM => [0.7, 1.9, 0.7],
             EntityKind::SPIDER => [1.4, 0.9, 1.4],
             EntityKind::STRAY => [0.6, 1.99, 0.6],
-            EntityKind::THROWN_EGG => [0.25, 0.25, 0.25],
-            EntityKind::THROWN_ENDERPEARL => [0.25, 0.25, 0.25],
-            EntityKind::THROWN_EXPERIENCE_BOTTLE => [0.25, 0.25, 0.25],
-            EntityKind::THROWN_SPLASH_POTION | EntityKind::THROWN_LINGERING_POTION => [0.25, 0.25, 0.25],
-            EntityKind::THROWN_TRIDENT => [0.5, 0.5, 0.5],
+            EntityKind::EGG => [0.25, 0.25, 0.25],
+            EntityKind::ENDER_PEARL => [0.25, 0.25, 0.25],
+            EntityKind::EXPERIENCE_BOTTLE => [0.25, 0.25, 0.25],
+            EntityKind::SPLASH_POTION | EntityKind::LINGERING_POTION => [0.25, 0.25, 0.25],
+            EntityKind::TRIDENT => [0.5, 0.5, 0.5],
             EntityKind::TRADER_LLAMA => [0.9, 1.87, 0.9],
             EntityKind::TROPICAL_FISH => [0.5, 0.4, 0.5],
             EntityKind::VEX => [0.4, 0.8, 0.4],
             EntityKind::VINDICATOR => [0.6, 1.95, 0.6],
-            EntityKind::WITHER_BOSS => [0.9, 3.5, 0.9],
+            EntityKind::WITHER => [0.9, 3.5, 0.9],
             EntityKind::WITHER_SKELETON => [0.7, 2.4, 0.7],
             EntityKind::WITHER_SKULL => [0.3125, 0.3125, 0.3125],
-            EntityKind::FISHING_HOOK => [0.25, 0.25, 0.25],
+            EntityKind::FISHING_BOBBER => [0.25, 0.25, 0.25],
             _ => {
                 continue;
             }
@@ -224,10 +224,10 @@ fn update_constant_hitbox(
 
 fn update_warden_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &entity::DataPose),
+        (&mut HitboxShape, &entity::Pose),
         (
-            Or<(Changed<entity::DataPose>, Added<HitboxShape>)>,
-            With<warden::Warden>,
+            Or<(Changed<entity::Pose>, Added<HitboxShape>)>,
+            With<warden::WardenEntity>,
         ),
     >,
 ) {
@@ -244,8 +244,8 @@ fn update_warden_hitbox(
 
 fn update_area_effect_cloud_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &area_effect_cloud::DataRadius),
-        Or<(Changed<area_effect_cloud::DataRadius>, Added<HitboxShape>)>,
+        (&mut HitboxShape, &area_effect_cloud::Radius),
+        Or<(Changed<area_effect_cloud::Radius>, Added<HitboxShape>)>,
     >,
 ) {
     for (mut hitbox, cloud_radius) in &mut query {
@@ -256,8 +256,8 @@ fn update_area_effect_cloud_hitbox(
 
 fn update_armor_stand_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &armor_stand::DataClientFlags),
-        Or<(Changed<armor_stand::DataClientFlags>, Added<HitboxShape>)>,
+        (&mut HitboxShape, &armor_stand::ArmorStandFlags),
+        Or<(Changed<armor_stand::ArmorStandFlags>, Added<HitboxShape>)>,
     >,
 ) {
     for (mut hitbox, stand_flags) in &mut query {
@@ -282,15 +282,10 @@ fn child_hitbox(child: bool, v: DVec3) -> DVec3 {
 
 fn update_passive_child_hitbox(
     mut query: Query<
-        (
-            Entity,
-            &mut HitboxShape,
-            &EntityKind,
-            &ageable_mob::DataBabyId,
-        ),
-        Or<(Changed<ageable_mob::DataBabyId>, Added<HitboxShape>)>,
+        (Entity, &mut HitboxShape, &EntityKind, &passive::Child),
+        Or<(Changed<passive::Child>, Added<HitboxShape>)>,
     >,
-    pose_query: Query<&entity::DataPose>,
+    pose_query: Query<&entity::Pose>,
 ) {
     for (entity, mut hitbox, entity_kind, child) in &mut query {
         let big_s = match *entity_kind {
@@ -315,7 +310,7 @@ fn update_passive_child_hitbox(
             }
             EntityKind::LLAMA => [0.9, 1.87, 0.9],
             EntityKind::MULE => [1.39648, 1.6, 1.39648],
-            EntityKind::MUSHROOM_COW => [0.9, 1.4, 0.9],
+            EntityKind::MOOSHROOM => [0.9, 1.4, 0.9],
             EntityKind::OCELOT => [0.6, 0.7, 0.6],
             EntityKind::PANDA => [1.3, 1.25, 1.3],
             EntityKind::PIG => [0.9, 0.9, 0.9],
@@ -345,8 +340,8 @@ fn update_passive_child_hitbox(
 
 fn update_zombie_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &zombie::DataBabyId),
-        Or<(Changed<zombie::DataBabyId>, Added<HitboxShape>)>,
+        (&mut HitboxShape, &zombie::Baby),
+        Or<(Changed<zombie::Baby>, Added<HitboxShape>)>,
     >,
 ) {
     for (mut hitbox, baby) in &mut query {
@@ -356,8 +351,8 @@ fn update_zombie_hitbox(
 
 fn update_piglin_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &piglin::DataBabyId),
-        Or<(Changed<piglin::DataBabyId>, Added<HitboxShape>)>,
+        (&mut HitboxShape, &piglin::Baby),
+        Or<(Changed<piglin::Baby>, Added<HitboxShape>)>,
     >,
 ) {
     for (mut hitbox, baby) in &mut query {
@@ -367,8 +362,8 @@ fn update_piglin_hitbox(
 
 fn update_zoglin_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &zoglin::DataBabyId),
-        Or<(Changed<zoglin::DataBabyId>, Added<HitboxShape>)>,
+        (&mut HitboxShape, &zoglin::Baby),
+        Or<(Changed<zoglin::Baby>, Added<HitboxShape>)>,
     >,
 ) {
     for (mut hitbox, baby) in &mut query {
@@ -378,10 +373,10 @@ fn update_zoglin_hitbox(
 
 fn update_player_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &entity::DataPose),
+        (&mut HitboxShape, &entity::Pose),
         (
-            Or<(Changed<entity::DataPose>, Added<HitboxShape>)>,
-            With<player::Player>,
+            Or<(Changed<entity::Pose>, Added<HitboxShape>)>,
+            With<player::PlayerEntity>,
         ),
     >,
 ) {
@@ -400,8 +395,8 @@ fn update_player_hitbox(
 
 fn update_item_frame_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &item_frame::DataRotation),
-        Or<(Changed<item_frame::DataRotation>, Added<HitboxShape>)>,
+        (&mut HitboxShape, &item_frame::Rotation),
+        Or<(Changed<item_frame::Rotation>, Added<HitboxShape>)>,
     >,
 ) {
     for (mut hitbox, rotation) in &mut query {
@@ -433,8 +428,8 @@ fn update_item_frame_hitbox(
 
 fn update_slime_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &slime::IdSize),
-        Or<(Changed<slime::IdSize>, Added<HitboxShape>)>,
+        (&mut HitboxShape, &abstract_cube_mob::SlimeSize),
+        Or<(Changed<abstract_cube_mob::SlimeSize>, Added<HitboxShape>)>,
     >,
 ) {
     for (mut hitbox, slime_size) in &mut query {
@@ -445,10 +440,10 @@ fn update_slime_hitbox(
 
 fn update_painting_hitbox(
     mut query: Query<
-        (&mut HitboxShape, &painting::DataPaintingVariantId, &Look),
+        (&mut HitboxShape, &painting::Variant, &Look),
         Or<(
             Changed<Look>,
-            Changed<painting::DataPaintingVariantId>,
+            Changed<painting::Variant>,
             Added<HitboxShape>,
         )>,
     >,
@@ -555,12 +550,12 @@ fn update_shulker_hitbox(
     mut query: Query<
         (
             &mut HitboxShape,
-            &shulker::DataPeekId,
-            &shulker::DataAttachFaceId,
+            &shulker::PeekAmount,
+            &shulker::AttachedFace,
         ),
         Or<(
-            Changed<shulker::DataPeekId>,
-            Changed<shulker::DataAttachFaceId>,
+            Changed<shulker::PeekAmount>,
+            Changed<shulker::AttachedFace>,
             Added<HitboxShape>,
         )>,
     >,

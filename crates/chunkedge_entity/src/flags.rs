@@ -37,7 +37,7 @@ macro_rules! flags {
 }
 
 flags! {
-    entity::DataSharedFlagsId {
+    entity::Flags {
         on_fire: 0,
         sneaking: 1,
         sprinting: 3,
@@ -46,11 +46,11 @@ flags! {
         glowing: 6,
         fall_flying: 7,
     }
-    abstract_arrow::IdFlags {
+    persistent_projectile::ProjectileFlags {
         critical: 0,
         no_clip: 1,
     }
-    living::DataLivingEntityFlags {
+    living::LivingFlags {
         using_item: 0,
         off_hand_active: 1,
         using_riptide: 2,
@@ -64,21 +64,21 @@ flags! {
         right_pants_leg: 5,
         hat: 6,
     }
-    armor_stand::DataClientFlags {
+    armor_stand::ArmorStandFlags {
         small: 0,
         show_arms: 2,
         hide_base_plate: 3,
         marker: 4,
     }
-    mob::DataMobFlagsId {
+    mob::MobFlags {
         ai_disabled: 0,
         left_handed: 1,
         attacking: 2,
     }
-    bat::DataIdFlags {
+    bat::BatFlags {
         hanging: 0,
     }
-    abstract_horse::DataIdFlags {
+    abstract_horse::HorseFlags {
         tamed: 1,
         saddled: 2,
         bred: 3,
@@ -86,7 +86,7 @@ flags! {
         angry: 5,
         eating: 6,
     }
-    fox::DataFlagsId {
+    fox::FoxFlags {
         sitting: 0,
         crouching: 2,
         rolling_head: 3,
@@ -95,29 +95,29 @@ flags! {
         walking: 6,
         aggressive: 7,
     }
-    panda::DataIdFlags {
+    panda::PandaFlags {
         sneezing: 1,
         playing: 2,
         sitting: 3,
         lying_on_back: 4,
     }
-    tamable_animal::DataFlagsId {
+    tameable::TameableFlags {
         sitting_pose: 0,
         tamed: 2,
     }
-    iron_golem::DataFlagsId {
+    iron_golem::IronGolemFlags {
         player_created: 0,
     }
-    snow_golem::DataPumpkinId {
+    snow_golem::SnowGolemFlags {
         has_pumpkin: 4,
     }
-    blaze::DataFlagsId {
+    blaze::BlazeFlags {
         fire_active: 0,
     }
-    vex::DataFlagsId {
+    vex::VexFlags {
         charging: 0,
     }
-    spider::DataFlagsId {
+    spider::SpiderFlags {
         climbing_wall: 0,
     }
 }
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn get_set_flags() {
-        let mut flags = entity::DataSharedFlagsId(0);
+        let mut flags = entity::Flags(0);
 
         flags.set_on_fire(true);
         let before = flags.clone();

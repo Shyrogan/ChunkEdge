@@ -240,11 +240,9 @@ impl Value {
                 quote!(chunkedge_protocol::Text::text(#txt))
             }
             Value::OptionalTextComponent(t) => match t {
-                Some(txt) => {
-                    quote!(Some(chunkedge_protocol::Text::text(#txt)))
-                }
+                Some(txt) => quote!(Some(chunkedge_protocol::Text::text(#txt))),
                 None => quote!(None),
-            },
+            }
             Value::ItemStack(_stack) => {
                 quote!(chunkedge_protocol::ItemStack::default())
             }
@@ -652,7 +650,7 @@ fn build_entities() -> anyhow::Result<TokenStream> {
                     super::active_status_effects::ActiveStatusEffects
                 });
             }
-            "Player" => {
+            "PlayerEntity" => {
                 requires.push(quote! {
                     Food,
                     Saturation
@@ -684,9 +682,9 @@ fn build_entities() -> anyhow::Result<TokenStream> {
                     pub struct Absorption(pub f32);
                 }]);
             }
-            "Player" => {
+            "PlayerEntity" => {
                 module_body.extend([quote! {
-                    #[doc = "Special untracked component for `Player` entities."]
+                    #[doc = "Special untracked component for `PlayerEntity` entities."]
                     #[derive(bevy_ecs::component::Component, Copy, Clone, Debug)]
                     pub struct Food(pub i32);
 
@@ -696,7 +694,7 @@ fn build_entities() -> anyhow::Result<TokenStream> {
                         }
                     }
 
-                    #[doc = "Special untracked component for `Player` entities."]
+                    #[doc = "Special untracked component for `PlayerEntity` entities."]
                     #[derive(bevy_ecs::component::Component, Copy, Clone, Default, Debug)]
                     pub struct Saturation(pub f32);
                 }]);
@@ -713,7 +711,17 @@ fn build_entities() -> anyhow::Result<TokenStream> {
     }
 
     systems.extend([quote! {
-        #[doc = "Special case for `living_entity::Attributes`."]
+        #[doc = "Special case for `living::Absorption`."]
+        #[doc = "Updates the `AbsorptionAmount` component of the player entity."]
+        fn update_living_and_player_absorption(
+            mut query: Query<(&living::Absorption, &mut player::AbsorptionAmount), Changed<living::Absorption>>
+        ) {
+            for (living_absorption, mut player_absorption) in &mut query {
+                player_absorption.0 = living_absorption.0;
+            }
+        }
+
+        #[doc = "Special case for `living::Attributes`."]
         fn update_living_attributes(
             mut query: Query<(
                 &mut attributes::TrackedEntityAttributes,
@@ -729,6 +737,7 @@ fn build_entities() -> anyhow::Result<TokenStream> {
         }
     }]);
 
+    derived_system_names.push(quote!(update_living_and_player_absorption));
     derived_system_names.push(quote!(update_living_attributes));
 
     #[derive(Deserialize, Debug)]

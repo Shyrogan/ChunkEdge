@@ -6,7 +6,7 @@ use chunkedge_registry::{BiomeRegistry, DimensionTypeRegistry};
 use chunkedge_server::ChunkPos;
 
 use crate::client::{ViewDistance, VisibleChunkLayer, VisibleEntityLayers};
-use crate::entity::cow::Cow;
+use crate::entity::cow::CowEntity;
 use crate::entity::{EntityLayerId, Position};
 use crate::layer::chunk::UnloadedChunk;
 use crate::layer::{ChunkLayer, EntityLayer};
@@ -282,11 +282,11 @@ fn entity_layer_switching() {
 
     // Spawn three entities and put them all on the main layer to start.
 
-    let e1 = (Cow, EntityLayerId(l1));
+    let e1 = (CowEntity, EntityLayerId(l1));
 
-    let e2 = (Cow, EntityLayerId(l1));
+    let e2 = (CowEntity, EntityLayerId(l1));
 
-    let e3 = (Cow, EntityLayerId(l1));
+    let e3 = (CowEntity, EntityLayerId(l1));
 
     let e1 = app.world_mut().spawn(e1).id();
     let _e2 = app.world_mut().spawn(e2).id();
@@ -384,7 +384,7 @@ fn chunk_entity_spawn_despawn() {
     let cow_ent = app
         .world_mut()
         .spawn((
-            Cow,
+            CowEntity,
             Position::new([8.0, 0.0, 8.0]),
             EntityLayerId(layer_ent),
         ))

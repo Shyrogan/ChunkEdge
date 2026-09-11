@@ -1,6 +1,6 @@
 #![allow(clippy::type_complexity)]
 
-use chunkedge::{entity::cow::Cow, entity::pig::Pig, prelude::*};
+use chunkedge::{entity::cow::CowEntity, entity::pig::PigEntity, prelude::*};
 
 const SPAWN_Y: i32 = 64;
 const VEHICLE_POS: [f64; 3] = [0.0, SPAWN_Y as f64 + 1.0, 3.0];
@@ -56,7 +56,7 @@ fn setup(
     let layer_id = commands.spawn(layer).id();
 
     commands.spawn((
-        Pig,
+        PigEntity,
         EntityLayerId(layer_id),
         Position::new(VEHICLE_POS),
         Vehicle,
@@ -65,7 +65,7 @@ fn setup(
 
     let cow = commands
         .spawn((
-            Cow,
+            CowEntity,
             EntityLayerId(layer_id),
             Position::new(COW_POS),
             Orbit(COW_POS.into()),
@@ -73,7 +73,7 @@ fn setup(
         .id();
 
     commands.spawn((
-        Cow,
+        CowEntity,
         EntityLayerId(layer_id),
         Position::new(COW_POS),
         Riding(cow),

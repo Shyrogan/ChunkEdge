@@ -4,14 +4,15 @@ use std::collections::HashMap;
 
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
-use chunkedge::entity::hoglin::Hoglin;
-use chunkedge::entity::pig::Pig;
-use chunkedge::entity::sheep::Sheep;
-use chunkedge::entity::warden::Warden;
-use chunkedge::entity::zombie::Zombie;
-use chunkedge::entity::zombie_horse::ZombieHorse;
+use chunkedge::entity::hoglin::HoglinEntity;
+use chunkedge::entity::pig::PigEntity;
+use chunkedge::entity::sheep::SheepEntity;
+use chunkedge::entity::warden::WardenEntity;
+use chunkedge::entity::zombie::ZombieEntity;
+use chunkedge::entity::zombie_horse::ZombieHorseEntity;
 use chunkedge::entity::{Pose, entity};
 use chunkedge::prelude::*;
+use entity::NameVisible;
 use rand::RngExt;
 
 pub fn main() {
@@ -96,25 +97,25 @@ fn spawn_entity(
         let layer = *layer;
 
         match rand::rng().random_range(0..7) {
-            0 => commands.spawn((Sheep, position, layer, entity::DataCustomNameVisible(true))),
-            1 => commands.spawn((Pig, position, layer, entity::DataCustomNameVisible(true))),
-            2 => commands.spawn((Zombie, position, layer, entity::DataCustomNameVisible(true))),
-            3 => commands.spawn((ZombieHorse, position, layer, entity::DataCustomNameVisible(true))),
+            0 => commands.spawn((SheepEntity, position, layer, NameVisible(true))),
+            1 => commands.spawn((PigEntity, position, layer, NameVisible(true))),
+            2 => commands.spawn((ZombieEntity, position, layer, NameVisible(true))),
+            3 => commands.spawn((ZombieHorseEntity, position, layer, NameVisible(true))),
             4 => commands.spawn((
-                Warden,
+                WardenEntity,
                 position,
                 layer,
-                entity::DataCustomNameVisible(true),
-                entity::DataPose(Pose::Digging),
+                NameVisible(true),
+                entity::Pose(Pose::Digging),
             )),
-            5 => commands.spawn((Warden, position, layer, entity::DataCustomNameVisible(true))),
-            6 => commands.spawn((Hoglin, position, layer, entity::DataCustomNameVisible(true))),
+            5 => commands.spawn((WardenEntity, position, layer, NameVisible(true))),
+            6 => commands.spawn((HoglinEntity, position, layer, NameVisible(true))),
             _ => unreachable!(),
         };
     }
 }
 
-fn intersections(query: Query<(Entity, &Hitbox)>, mut name_query: Query<&mut entity::DataCustomName>) {
+fn intersections(query: Query<(Entity, &Hitbox)>, mut name_query: Query<&mut entity::CustomName>) {
     // This code only to show how hitboxes can be used
     let mut intersections = HashMap::new();
 

@@ -494,8 +494,8 @@ pub mod play {
     pub use change_game_mode_c2s::ChangeGameModeC2s;
     pub mod set_game_rule_c2s;
     pub use set_game_rule_c2s::{SetGameRuleC2s, SetGameRuleEntry};
-    pub mod spectate_entity_c2s;
-    pub use spectate_entity_c2s::SpectateEntityC2s;
+    pub mod spectator_action_c2s;
+    pub use spectator_action_c2s::SpectatorActionC2s;
     pub mod custom_click_action_c2s;
     pub use custom_click_action_c2s::CustomClickActionC2s;
     pub mod debug_block_value_s2c;

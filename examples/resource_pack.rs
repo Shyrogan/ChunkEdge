@@ -1,6 +1,6 @@
 #![allow(clippy::type_complexity)]
 
-use chunkedge::entity::sheep::Sheep;
+use chunkedge::entity::sheep::SheepEntity;
 use chunkedge::message::SendMessage;
 use chunkedge::prelude::*;
 use chunkedge::protocol::packets::play::attack_c2s::AttackC2s;
@@ -49,7 +49,7 @@ fn setup(
     let layer_ent = commands.spawn(layer).id();
 
     commands.spawn((
-        Sheep,
+        SheepEntity,
         EntityLayerId(layer_ent),
         Position::new([0.0, f64::from(SPAWN_Y) + 1.0, 2.0]),
         Look::new(180.0, 0.0),

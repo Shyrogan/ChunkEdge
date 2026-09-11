@@ -5,8 +5,8 @@ use chunkedge::network::ConnectionMode;
 use chunkedge::prelude::*;
 use chunkedge::status_effects::{AttributeModifier, StatusEffect};
 use chunkedge_server::entity::attributes::{EntityAttribute, EntityAttributes};
-use chunkedge_server::entity::entity::DataSharedFlagsId;
-use chunkedge_server::entity::living::{Absorption, DataHealthId};
+use chunkedge_server::entity::entity::Flags;
+use chunkedge_server::entity::living::{Absorption, Health};
 use chunkedge_server::status_effect::{StatusEffectAddedMessage, StatusEffectRemovedMessage};
 use rand::RngExt;
 use rand::seq::IndexedRandom;
@@ -157,7 +157,7 @@ fn adjust_modifier_amount(amplifier: i32, amount: f64) -> f64 {
 
 fn apply_potion_attribute(
     attributes: &mut Mut<EntityAttributes>,
-    health: &mut Option<Mut<DataHealthId>>,
+    health: &mut Option<Mut<Health>>,
     amplifier: i32,
     attr: AttributeModifier,
     name: &str,
@@ -182,7 +182,7 @@ fn apply_potion_attribute(
 
 fn remove_potion_attribute(
     attributes: &mut Mut<EntityAttributes>,
-    health: &mut Option<Mut<DataHealthId>>,
+    health: &mut Option<Mut<Health>>,
     attr: AttributeModifier,
     name: &str,
 ) {
@@ -204,9 +204,9 @@ pub fn handle_status_effect_added(
     mut clients: Query<(
         &ActiveStatusEffects,
         &mut EntityAttributes,
-        Option<&mut DataHealthId>,
+        Option<&mut Health>,
         Option<&mut Absorption>,
-        &mut DataSharedFlagsId,
+        &mut Flags,
     )>,
     mut messages: MessageReader<StatusEffectAddedMessage>,
 ) {
@@ -260,9 +260,9 @@ pub fn handle_status_effect_added(
 pub fn handle_status_effect_removed(
     mut clients: Query<(
         &mut EntityAttributes,
-        Option<&mut DataHealthId>,
+        Option<&mut Health>,
         Option<&mut Absorption>,
-        &mut DataSharedFlagsId,
+        &mut Flags,
     )>,
     mut messages: MessageReader<StatusEffectRemovedMessage>,
 ) {
@@ -299,7 +299,7 @@ pub fn handle_status_effect_removed(
 }
 
 pub fn handle_status_effect_update(
-    mut clients: Query<(&ActiveStatusEffects, &EntityAttributes, Option<&mut DataHealthId>)>,
+    mut clients: Query<(&ActiveStatusEffects, &EntityAttributes, Option<&mut Health>)>,
 ) {
     for (status, attributes, mut health) in &mut clients.iter_mut() {
         for effect in status.get_current_effects() {

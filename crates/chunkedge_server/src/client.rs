@@ -13,8 +13,8 @@ use bytes::{Bytes, BytesMut};
 use chunkedge_binary::Encode;
 use chunkedge_entity::attributes::{EntityAttributes, TrackedEntityAttributes};
 use chunkedge_entity::avatar::{DataPlayerMainHand, DataPlayerModeCustomisation};
-use chunkedge_entity::living::DataHealthId as Health;
-use chunkedge_entity::player::{Food, Player, Saturation};
+use chunkedge_entity::living::Health;
+use chunkedge_entity::player::{Food, PlayerEntity, Saturation};
 use chunkedge_entity::tracked_data::TrackedData;
 use chunkedge_entity::{
     ClearEntityChangesSet, EntityId, EntityLayerId, EntityStatus, OldPosition, Position, Velocity,
@@ -147,7 +147,7 @@ pub struct ClientBundle {
     pub flying_speed: crate::abilities::FlyingSpeed,
     pub fov_modifier: crate::abilities::FovModifier,
     pub player_abilities_flags: crate::abilities::PlayerAbilitiesFlags,
-    pub player: Player,
+    pub player: PlayerEntity,
     pub uuid: UniqueId,
     pub layer: EntityLayerId,
     pub player_model_parts: DataPlayerModeCustomisation,
@@ -199,7 +199,7 @@ impl ClientBundle {
             flying_speed: Default::default(),
             fov_modifier: Default::default(),
             player_abilities_flags: Default::default(),
-            player: Player,
+            player: PlayerEntity,
             uuid: UniqueId(args.uuid),
             layer: Default::default(),
             player_model_parts: DataPlayerModeCustomisation(

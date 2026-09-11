@@ -1,4 +1,4 @@
-use chunkedge_server::entity::living::DataHealthId;
+use chunkedge_server::entity::living::Health;
 use chunkedge_server::entity::player::{Food, Saturation};
 use chunkedge_server::protocol::VarInt;
 use chunkedge_server::protocol::packets::play::SetHealthS2c;
@@ -18,7 +18,7 @@ fn test_hunger() {
     helper.clear_received();
 
     let og_saturation = app.world_mut().get::<Saturation>(client).unwrap().0;
-    let og_health = app.world_mut().get::<DataHealthId>(client).unwrap().0;
+    let og_health = app.world_mut().get::<Health>(client).unwrap().0;
 
     // set food level to 5
     app.world_mut().get_mut::<Food>(client).unwrap().0 = 5;
