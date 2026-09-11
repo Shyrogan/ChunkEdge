@@ -67,6 +67,8 @@ pub struct RespawnPosition {
     pub pos: BlockPos,
     /// The yaw angle that clients will respawn with (in degrees).
     pub yaw: f32,
+    /// The pitch angle that clients will respawn with (in degrees).
+    pub pitch: f32,
 }
 
 /// A convenient [`QueryData`] for obtaining client spawn components. Also see
@@ -219,9 +221,17 @@ pub(super) fn update_respawn_position(
     mut clients: Query<(&mut Client, &RespawnPosition), Changed<RespawnPosition>>,
 ) {
     for (mut client, respawn_pos) in &mut clients {
+        // TODO: picks up the actual spawn dimension instead of assuming
+        // overworld (no layer -> dimension mapping exists yet).
         client.write_packet(&SetDefaultSpawnPositionS2c {
-            position: respawn_pos.pos,
-            angle: respawn_pos.yaw,
+            position: GlobalPos {
+                dimension_name: Ident::new("minecraft:overworld")
+                    .expect("invalid dimension ident")
+                    .into(),
+                position: respawn_pos.pos,
+            },
+            yaw: respawn_pos.yaw,
+            pitch: respawn_pos.pitch,
         });
     }
 }
