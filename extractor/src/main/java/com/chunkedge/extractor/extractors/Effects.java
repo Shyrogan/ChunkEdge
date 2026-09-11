@@ -35,7 +35,7 @@ public class Effects implements Main.Extractor {
                 effect.getDescriptionId()
             );
             effectJson.addProperty("color", effect.getColor());
-            effectJson.addProperty("instant", effect.isInstantenous());
+            effectJson.addProperty("instant", effect.isInstantaneous());
             effectJson.addProperty("category", effect.getCategory().name());
 
             var attributeModifiersJson = new JsonArray();
