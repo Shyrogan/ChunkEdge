@@ -6,4 +6,6 @@ use crate::Packet;
 pub struct PlayerRotationS2c {
     pub yaw: f32,
     pub pitch: f32,
+    pub relative_yaw: bool,
+    pub relative_pitch: bool,
 }
