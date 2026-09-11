@@ -9,6 +9,7 @@ import java.util.TreeMap;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistrySynchronization;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.RegistryLayer;
 
 public class Tags implements Main.Extractor {
 
@@ -28,6 +29,8 @@ public class Tags implements Main.Extractor {
         var tagsJson = new JsonObject();
 
         var registryTags = new TreeMap<String, Map<String, JsonArray>>();
+        // Dynamic (worldgen) registries that are networked, mirroring the
+        // first half of vanilla's RegistrySynchronization.networkSafeRegistries.
         server
             .registryAccess()
             .registries()
@@ -38,6 +41,24 @@ public class Tags implements Main.Extractor {
                 var serialized = serializeTags(entry.value());
                 if (!serialized.isEmpty()) {
                     registryTags.put(
+                        entry.key().identifier().toString(),
+                        serialized
+                    );
+                }
+            });
+        // Static registries (blocks, items, entity types, ...) are always
+        // synced wholesale, mirroring the second half of
+        // networkSafeRegistries. Without these, clients fail to resolve
+        // tag references (e.g. #minecraft:enchantable/*) inside synced
+        // registry entries and disconnect during configuration.
+        server
+            .registries()
+            .getLayer(RegistryLayer.STATIC)
+            .registries()
+            .forEach(entry -> {
+                var serialized = serializeTags(entry.value());
+                if (!serialized.isEmpty()) {
+                    registryTags.putIfAbsent(
                         entry.key().identifier().toString(),
                         serialized
                     );
