@@ -10,7 +10,7 @@ use bevy_ecs::prelude::*;
 use chunkedge_equipment::*;
 use chunkedge_server::{
     ItemStack, ItemKind,
-    entity::player::PlayerEntity,
+    entity::player::Player,
 };
 // Add equipment to players when they are added to the world.
 fn init_equipment(
@@ -18,7 +18,7 @@ fn init_equipment(
         &mut Equipment,
         (
             Added<Equipment>,
-            With<PlayerEntity>,
+            With<Player>,
         ),
     >,
 ) {
