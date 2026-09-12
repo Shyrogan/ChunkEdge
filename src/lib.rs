@@ -143,8 +143,8 @@ pub mod prelude {
         VisibleChunkLayer, VisibleEntityLayers, despawn_disconnected_clients,
     };
     pub use chunkedge_server::client_command::{
-        JumpWithHorseMessage, JumpWithHorseState, LeaveBedMessage, PlayerCommand, SneakMessage,
-        SneakState, SprintMessage, SprintState,
+        JumpWithHorseMessage, JumpWithHorseState, LeaveBedMessage, OpenInventoryMessage,
+        PlayerCommand, SneakMessage, SneakState, SprintMessage, SprintState,
     };
     pub use chunkedge_server::entity::hitbox::{Hitbox, HitboxShape};
     pub use chunkedge_server::entity::{

@@ -18,6 +18,7 @@ impl Plugin for ClientCommandPlugin {
             .add_message::<SneakMessage>()
             .add_message::<JumpWithHorseMessage>()
             .add_message::<LeaveBedMessage>()
+            .add_message::<OpenInventoryMessage>()
             .add_systems(
                 EventLoopPreUpdate,
                 (handle_client_command, handle_player_input),
@@ -69,12 +70,20 @@ pub struct LeaveBedMessage {
     pub client: Entity,
 }
 
+/// Emitted when a vanilla client opens its own inventory. User code can
+/// respond to it (for example by opening a custom menu).
+#[derive(Message, Copy, Clone, PartialEq, Eq, Debug)]
+pub struct OpenInventoryMessage {
+    pub client: Entity,
+}
+
 fn handle_client_command(
     mut packets: MessageReader<PacketMessage>,
     mut clients: Query<(&mut entity::Pose, &mut Flags)>,
     mut sprinting_messages: MessageWriter<SprintMessage>,
     mut jump_with_horse_messages: MessageWriter<JumpWithHorseMessage>,
     mut leave_bed_messages: MessageWriter<LeaveBedMessage>,
+    mut open_inventory_messages: MessageWriter<OpenInventoryMessage>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<PlayerCommandC2s>() {
@@ -118,7 +127,11 @@ fn handle_client_command(
                         state: JumpWithHorseState::Stop,
                     });
                 }
-                PlayerCommand::OpenInventory => {} // TODO
+                PlayerCommand::OpenInventory => {
+                    open_inventory_messages.write(OpenInventoryMessage {
+                        client: packet.client,
+                    });
+                }
                 PlayerCommand::StartFallFlying => {
                     if let Ok((mut pose, _)) = clients.get_mut(packet.client) {
                         pose.0 = Pose::FallFlying;
