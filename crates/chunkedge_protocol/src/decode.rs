@@ -121,8 +121,8 @@ impl PacketDecoder {
         #[cfg(not(feature = "compression"))]
         {
             self.buf.advance(packet_len_len);
-            data = self.buf.split_to(packet_len as usize);
-        }
+            data = self.buf.split_to(packet_len as usize)
+        };
 
         // Decode the leading packet ID.
         r = &data[..];

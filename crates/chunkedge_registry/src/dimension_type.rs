@@ -11,6 +11,7 @@ use std::ops::{Deref, DerefMut};
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use chunkedge_ident::{Ident, ident};
+use chunkedge_nbt::Compound;
 use chunkedge_nbt::serde::ser::CompoundSerializer;
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -136,6 +137,11 @@ pub struct DimensionType {
     pub min_y: i32,
     pub monster_spawn_block_light_limit: i32,
     pub monster_spawn_light_level: MonsterSpawnLightLevel,
+    /// Environment attributes (sky/fog colors, light factors, music, ...).
+    /// New in 26.x and forwarded opaquely: without these the client falls
+    /// back to defaults such as a black sky and black fog.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<Compound>,
     /// Timelines (world clocks) reference, e.g. `"#minecraft:in_overworld"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timelines: Option<String>,
@@ -164,6 +170,7 @@ impl Default for DimensionType {
             min_y: -64,
             monster_spawn_block_light_limit: 0,
             monster_spawn_light_level: MonsterSpawnLightLevel::Int(7),
+            attributes: None,
             has_ender_dragon_fight: false,
             timelines: None,
             default_clock: None,
@@ -205,5 +212,48 @@ pub enum MonsterSpawnLightLevelTagged {
 impl From<i32> for MonsterSpawnLightLevel {
     fn from(value: i32) -> Self {
         Self::Int(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chunkedge_nbt::Value;
+
+    use super::*;
+
+    /// The 26.x `attributes` (sky colors, light factors, ...) must survive
+    /// the deserialize → serialize round-trip instead of being dropped.
+    /// Dropping them makes vanilla clients fall back to defaults such as a
+    /// black sky and black fog.
+    #[test]
+    fn dimension_attributes_round_trip() {
+        let codec = include_bytes!("../extracted/registry_codec.json");
+        let compound = serde_json::from_slice::<Compound>(codec).expect("valid registry codec");
+
+        let Value::Compound(dimensions) = compound
+            .get("minecraft:dimension_type")
+            .expect("dimension_type registry")
+            .clone()
+        else {
+            panic!("expected compound");
+        };
+        let Value::Compound(overworld) = dimensions
+            .get("minecraft:overworld")
+            .expect("overworld entry")
+            .clone()
+        else {
+            panic!("expected compound");
+        };
+
+        let dimension_type = DimensionType::deserialize(overworld).expect("overworld deserializes");
+        assert!(dimension_type.attributes.is_some());
+
+        let reserialized = dimension_type
+            .serialize(CompoundSerializer)
+            .expect("serializes");
+        let Some(Value::Compound(attrs)) = reserialized.get("attributes") else {
+            panic!("attributes dropped from dimension type");
+        };
+        assert!(attrs.contains_key("minecraft:visual/sky_color"));
     }
 }

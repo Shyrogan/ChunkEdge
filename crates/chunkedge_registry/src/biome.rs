@@ -13,6 +13,7 @@ use std::ops::{Deref, DerefMut};
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use chunkedge_ident::{Ident, ident};
+use chunkedge_nbt::Compound;
 use chunkedge_nbt::serde::ser::CompoundSerializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use tracing::error;
@@ -115,6 +116,11 @@ pub struct Biome {
     pub has_precipitation: bool,
     pub temperature: f32,
     pub downfall: f32,
+    /// Environment attributes (e.g. `minecraft:visual/sky_color`, moved out
+    /// of `effects` in 26.1). Forwarded opaquely: without these the client
+    /// falls back to defaults such as a black sky.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<Compound>,
     pub effects: BiomeEffects,
 }
 
@@ -125,6 +131,7 @@ impl Default for Biome {
             has_precipitation: true,
             temperature: 0.8,
             downfall: 0.4,
+            attributes: None,
             effects: BiomeEffects::default(),
         }
     }
@@ -204,6 +211,12 @@ pub struct BiomeEffects {
         deserialize_with = "deserialize_color"
     )]
     pub water_fog_color: Option<u32>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "deserialize_color"
+    )]
+    pub dry_foliage_color: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grass_color_modifier: Option<String>,
 }
@@ -262,6 +275,7 @@ impl Default for BiomeEffects {
             fog_color: Some(12638463),
             water_color: Some(4159204),
             water_fog_color: Some(329011),
+            dry_foliage_color: None,
             additions_sound: None,
             music: Vec::new(),
             particle: None,
@@ -269,5 +283,45 @@ impl Default for BiomeEffects {
             grass_color: None,
             grass_color_modifier: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chunkedge_nbt::Value;
+    use chunkedge_nbt::serde::ser::CompoundSerializer;
+
+    use super::*;
+
+    /// Same as the dimension-type case: 26.x biome `attributes` (sky color,
+    /// ...) must survive the round-trip instead of being dropped.
+    #[test]
+    fn biome_attributes_round_trip() {
+        let codec = include_bytes!("../extracted/registry_codec.json");
+        let compound = serde_json::from_slice::<Compound>(codec).expect("valid registry codec");
+
+        let Value::Compound(biomes) = compound
+            .get("minecraft:worldgen/biome")
+            .expect("biome registry")
+            .clone()
+        else {
+            panic!("expected compound");
+        };
+        let Value::Compound(plains) = biomes
+            .get("minecraft:plains")
+            .expect("plains entry")
+            .clone()
+        else {
+            panic!("expected compound");
+        };
+
+        let biome = Biome::deserialize(plains).expect("plains deserializes");
+        assert!(biome.attributes.is_some());
+
+        let reserialized = biome.serialize(CompoundSerializer).expect("serializes");
+        let Some(Value::Compound(attrs)) = reserialized.get("attributes") else {
+            panic!("attributes dropped from biome");
+        };
+        assert!(attrs.contains_key("minecraft:visual/sky_color"));
     }
 }

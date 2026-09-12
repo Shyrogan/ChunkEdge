@@ -177,9 +177,7 @@ fn right_click_interaction_mounts_the_client() {
     helper.send(&InteractC2s {
         entity_id: VarInt(vehicle_id),
         hand: Hand::Main,
-        target: chunkedge_server::protocol::LpVec3(chunkedge_server::math::DVec3::new(
-            0.0, 0.0, 0.0,
-        )),
+        target: chunkedge_server::protocol::Velocity([0, 0, 0]),
         sneaking: false,
     });
 

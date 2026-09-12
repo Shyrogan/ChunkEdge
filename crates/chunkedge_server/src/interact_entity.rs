@@ -46,7 +46,7 @@ fn handle_interact_entity(
                     entity,
                     sneaking: pkt.sneaking,
                     hand: pkt.hand,
-                    target: pkt.target.0,
+                    target: pkt.target_vec(),
                 });
             }
         }
