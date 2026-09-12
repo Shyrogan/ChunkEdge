@@ -51,7 +51,11 @@ fn handle_interact_block(
                 hand: pkt.hand,
                 position: pkt.position,
                 face: pkt.face,
-                cursor_pos: pkt.cursor_pos,
+                cursor_pos: Vec3::new(
+                    pkt.cursor_pos.x as f32,
+                    pkt.cursor_pos.y as f32,
+                    pkt.cursor_pos.z as f32,
+                ),
                 head_inside_block: pkt.head_inside_block,
                 sequence: pkt.sequence.0,
             });

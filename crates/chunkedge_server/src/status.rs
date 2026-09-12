@@ -42,6 +42,9 @@ fn handle_status(
                         client: packet.client,
                     });
                 }
+                ClientCommandC2s::RequestGameruleValues => {
+                    // TODO: reply with the current gamerule values.
+                }
             }
         }
     }
