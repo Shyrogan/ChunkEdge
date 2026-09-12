@@ -7,7 +7,7 @@ use crate::Packet;
 /// wiki: [Spectator Action](https://minecraft.wiki/w/Java_Edition_protocol#Spectator_Action)
 #[derive(Copy, Clone, Debug, Encode, Decode, Packet)]
 pub struct SpectatorActionC2s {
-    pub target: SpectatorTarget,
+    pub entity_id: SpectatorTarget,
 }
 
 /// An optionally-present spectated entity, encoded like vanilla
