@@ -1,5 +1,4 @@
-use chunkedge_binary::{Decode, Encode};
-use chunkedge_ident::Ident;
+use chunkedge_binary::{Decode, Encode, VarInt, VarLong};
 
 use crate::Packet;
 
@@ -14,9 +13,11 @@ pub struct SetTimeS2c {
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct ClockState {
-    pub clock: Ident<String>,
+    /// World-clock registry ID (`minecraft:overworld` is 0 in the vanilla
+    /// codec, `minecraft:the_end` is 1).
+    pub clock: VarInt,
     /// Total ticks.
-    pub total_ticks: i64,
+    pub total_ticks: VarLong,
     /// Partial tick progress in `[0, 1)`.
     pub partial_tick: f32,
     /// Tick rate multiplier.

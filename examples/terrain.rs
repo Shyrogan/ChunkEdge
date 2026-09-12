@@ -8,6 +8,9 @@ use std::time::SystemTime;
 
 use chunkedge::prelude::*;
 use chunkedge::spawn::IsFlat;
+use chunkedge_server::protocol::WritePacket as _;
+use chunkedge_server::protocol::packets::play::set_time_s2c::{ClockState, SetTimeS2c};
+use chunkedge_server::protocol::{VarInt, VarLong};
 use flume::{Receiver, Sender};
 use noise::{NoiseFn, SuperSimplex};
 use tracing::info;
@@ -113,6 +116,7 @@ fn setup(
 fn init_clients(
     mut clients: Query<
         (
+            &mut Client,
             &mut EntityLayerId,
             &mut VisibleChunkLayer,
             &mut VisibleEntityLayers,
@@ -125,6 +129,7 @@ fn init_clients(
     layers: Query<Entity, (With<ChunkLayer>, With<EntityLayer>)>,
 ) {
     for (
+        mut client,
         mut layer_id,
         mut visible_chunk_layer,
         mut visible_entity_layers,
@@ -141,6 +146,20 @@ fn init_clients(
         pos.set(SPAWN_POS);
         *game_mode = GameMode::Creative;
         is_flat.0 = true;
+
+        // Freeze the world clock at noon so the demo never drifts into
+        // night. One shot is enough with rate 0.
+        client.write_packet(&SetTimeS2c {
+            world_age: 0,
+            clocks: vec![ClockState {
+                // World-clock registry ID: `minecraft:overworld` is 0 in
+                // the vanilla codec.
+                clock: VarInt(0),
+                total_ticks: VarLong(6000),
+                partial_tick: 0.0,
+                rate: 0.0,
+            }],
+        });
     }
 }
 
