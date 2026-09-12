@@ -161,6 +161,7 @@ impl ClientBundle {
             client: Client {
                 conn: args.conn,
                 enc: args.enc,
+                entity_id: EntityId::default(),
             },
             settings: crate::client_settings::ClientSettings {
                 locale: args.locale.into_boxed_str(),
@@ -251,6 +252,11 @@ pub struct ClientMarker;
 pub struct Client {
     conn: Box<dyn ClientConnection>,
     pub(crate) enc: PacketEncoder,
+    /// The client's protocol entity ID, assigned at join time.
+    ///
+    /// In 26.x, entity ID 0 means "unassigned" to vanilla clients, so
+    /// clients must receive a real nonzero ID like any other entity.
+    pub entity_id: EntityId,
 }
 
 /// Represents the bidirectional packet channel between the server and a client
@@ -398,7 +404,7 @@ impl Client {
     /// `velocity` is in m/s.
     pub fn set_velocity<V: Into<DVec3>>(&mut self, velocity: V) {
         self.write_packet(&SetEntityMotionS2c {
-            entity_id: VarInt(0),
+            entity_id: VarInt(self.entity_id.get()),
             velocity: Velocity(velocity.into()).to_packet_units(),
         });
     }
@@ -408,7 +414,7 @@ impl Client {
     /// The status is only visible to this client.
     pub fn trigger_status(&mut self, status: EntityStatus) {
         self.write_packet(&EntityEventS2c {
-            entity_id: 0,
+            entity_id: self.entity_id.get(),
             entity_status: status as u8,
         });
     }
