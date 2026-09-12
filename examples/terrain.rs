@@ -8,6 +8,7 @@ use std::time::SystemTime;
 
 use chunkedge::prelude::*;
 use chunkedge::spawn::IsFlat;
+use chunkedge_server::nbt::Value;
 use chunkedge_server::protocol::WritePacket as _;
 use chunkedge_server::protocol::packets::play::set_time_s2c::{ClockState, SetTimeS2c};
 use chunkedge_server::protocol::{VarInt, VarLong};
@@ -21,12 +22,14 @@ const HEIGHT: u32 = 384;
 struct ChunkWorkerState {
     sender: Sender<(ChunkPos, UnloadedChunk)>,
     receiver: Receiver<ChunkPos>,
+    seed: u32,
     // Noise functions
     density: SuperSimplex,
     hilly: SuperSimplex,
     stone: SuperSimplex,
     gravel: SuperSimplex,
     grass: SuperSimplex,
+    tree: SuperSimplex,
 }
 
 #[derive(Resource)]
@@ -65,7 +68,7 @@ pub fn main() {
 fn setup(
     mut commands: Commands,
     server: Res<Server>,
-    dimensions: Res<DimensionTypeRegistry>,
+    mut dimensions: ResMut<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
 ) {
     let seconds_per_day = 86_400;
@@ -83,11 +86,13 @@ fn setup(
     let state = Arc::new(ChunkWorkerState {
         sender: finished_sender,
         receiver: pending_receiver,
+        seed,
         density: SuperSimplex::new(seed),
         hilly: SuperSimplex::new(seed.wrapping_add(1)),
         stone: SuperSimplex::new(seed.wrapping_add(2)),
         gravel: SuperSimplex::new(seed.wrapping_add(3)),
         grass: SuperSimplex::new(seed.wrapping_add(4)),
+        tree: SuperSimplex::new(seed.wrapping_add(5)),
     });
 
     // Chunks are generated in a thread pool for parallelism and to avoid blocking
@@ -107,6 +112,26 @@ fn setup(
         sender: pending_sender,
         receiver: finished_receiver,
     });
+
+    // ChunkEdge has no lighting engine, so sky light arrives as zero
+    // everywhere. On 26.x the client renders that as
+    // (dark ambient `#0a0a0a` + zero sky/block) which reads as ~black.
+    // Fake fullbright for this demo: push the visual ambient/sky
+    // attributes to white and freeze the clock at noon. Library stays
+    // light-agnostic; this is purely example-side.
+    for (_, _, dim) in dimensions.iter_mut() {
+        dim.ambient_light = 1.0;
+        let attrs = dim.attributes.get_or_insert_with(Compound::new);
+        attrs.insert(
+            "minecraft:visual/ambient_light_color",
+            Value::String("#ffffff".to_owned()),
+        );
+        attrs.insert(
+            "minecraft:visual/sky_light_color",
+            Value::String("#ffffff".to_owned()),
+        );
+        attrs.insert("minecraft:visual/sky_light_factor", Value::Float(1.0));
+    }
 
     let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
 
@@ -148,7 +173,7 @@ fn init_clients(
         is_flat.0 = true;
 
         // Freeze the world clock at noon so the demo never drifts into
-        // night. One shot is enough with rate 0.
+        // night while sky light is faked. One shot is enough with rate 0.
         client.write_packet(&SetTimeS2c {
             world_age: 0,
             clocks: vec![ClockState {
@@ -296,6 +321,17 @@ fn chunk_worker(state: Arc<ChunkWorkerState>) {
 
                     chunk.set_block_state(offset_x, y as u32, offset_z, block);
                 }
+            }
+        }
+
+        // Surface heights for the decoration passes below.
+        let surface = surface_heights(&chunk);
+        plant_trees(&state, pos, &mut chunk, &surface);
+
+        for offset_z in 0..16 {
+            for offset_x in 0..16 {
+                let x = offset_x as i32 + pos.x * 16;
+                let z = offset_z as i32 + pos.z * 16;
 
                 // Add grass on top of grass blocks.
                 for y in (0..chunk.height()).rev() {
@@ -321,7 +357,7 @@ fn chunk_worker(state: Arc<ChunkWorkerState>) {
                                     offset_x,
                                     y,
                                     offset_z,
-                                    BlockState::GRASS_BLOCK,
+                                    BlockState::SHORT_GRASS,
                                 );
                             }
                         }
@@ -335,10 +371,12 @@ fn chunk_worker(state: Arc<ChunkWorkerState>) {
 }
 
 fn has_terrain_at(state: &ChunkWorkerState, p: DVec3) -> bool {
-    let hilly = lerp(0.1, 1.0, noise01(&state.hilly, p / 400.0)).powi(2);
+    // Broad, gentle hills: large features, compressed amplitude and a soft
+    // falloff so slopes round off instead of stacking into cliffs.
+    let hilly = lerp(0.2, 0.9, noise01(&state.hilly, p / 520.0)).powi(2);
 
-    let lower = 15.0 + 100.0 * hilly;
-    let upper = lower + 100.0 * hilly;
+    let lower = 25.0 + 60.0 * hilly;
+    let upper = lower + 55.0 * hilly;
 
     if p.y <= lower {
         return true;
@@ -348,9 +386,133 @@ fn has_terrain_at(state: &ChunkWorkerState, p: DVec3) -> bool {
 
     let density = 1.0 - lerpstep(lower, upper, p.y);
 
-    let n = fbm(&state.density, p / 100.0, 4, 2.0, 0.5);
+    let n = fbm(&state.density, p / 140.0, 4, 2.0, 0.5);
 
     n < density
+}
+
+fn surface_heights(chunk: &UnloadedChunk) -> [[u32; 16]; 16] {
+    let mut surface = [[0_u32; 16]; 16];
+    for oz in 0..16 {
+        for ox in 0..16 {
+            for y in (0..chunk.height()).rev() {
+                if !chunk.block_state(ox, y, oz).is_air() {
+                    surface[oz as usize][ox as usize] = y;
+                    break;
+                }
+            }
+        }
+    }
+    surface
+}
+
+/// Deterministic 64-bit mix of two coordinates and the world seed.
+fn hash2(x: i32, z: i32, seed: u32) -> u64 {
+    let mut h = (x as u64)
+        .wrapping_mul(0x8da6b3439b3f22eb)
+        .wrapping_add((z as u64).wrapping_mul(0xd4f6d498f45e9d77))
+        .wrapping_add(u64::from(seed));
+    h ^= h >> 30;
+    h = h.wrapping_mul(0xbf58476d1ce4e5b9);
+    h ^= h >> 27;
+    h = h.wrapping_mul(0x94d049bb133111eb);
+    h ^= h >> 31;
+    h
+}
+
+/// One tree candidate per 8x8 cell, gated by a low-frequency grove noise so
+/// trees cluster into woods instead of peppering the landscape. Pure function
+/// of world coordinates, so neighboring chunks agree without communication.
+fn is_tree_candidate(state: &ChunkWorkerState, x: i32, z: i32) -> bool {
+    const CELL: i32 = 8;
+    let ccx = x.div_euclid(CELL);
+    let ccz = z.div_euclid(CELL);
+    let h = hash2(ccx, ccz, state.seed);
+    let want_x = ccx * CELL + 2 + (h % (CELL as u64 - 4)) as i32;
+    let want_z = ccz * CELL + 2 + ((h >> 16) % (CELL as u64 - 4)) as i32;
+    if x != want_x || z != want_z {
+        return false;
+    }
+    let grove = DVec3::new(f64::from(x) / 45.0, 0.0, f64::from(z) / 45.0);
+    noise01(&state.tree, grove) >= 0.55
+}
+
+/// Plants small oaks on flat grass above the waterline. Columns whose canopy
+/// would cross the chunk border are skipped because neighbor chunks generate
+/// independently.
+fn plant_trees(
+    state: &ChunkWorkerState,
+    pos: ChunkPos,
+    chunk: &mut UnloadedChunk,
+    surface: &[[u32; 16]; 16],
+) {
+    const WATER_HEIGHT: u32 = 55;
+    for oz in 0..16_u32 {
+        for ox in 0..16_u32 {
+            let top = surface[oz as usize][ox as usize];
+            if chunk.block_state(ox, top, oz) != BlockState::GRASS_BLOCK {
+                continue;
+            }
+            if top <= WATER_HEIGHT + 1 || top + 8 >= chunk.height() {
+                continue;
+            }
+            if !(2..=13).contains(&ox) || !(2..=13).contains(&oz) {
+                continue;
+            }
+            // Gentle ground only: no trees on cliffs.
+            let t = top as i32;
+            let slope = (surface[oz as usize][(ox + 1).min(15) as usize] as i32 - t).abs()
+                + (surface[oz as usize][ox.saturating_sub(1) as usize] as i32 - t).abs()
+                + (surface[(oz + 1).min(15) as usize][ox as usize] as i32 - t).abs()
+                + (surface[oz.saturating_sub(1) as usize][ox as usize] as i32 - t).abs();
+            if slope > 4 {
+                continue;
+            }
+            let x = ox as i32 + pos.x * 16;
+            let z = oz as i32 + pos.z * 16;
+            if !is_tree_candidate(state, x, z) {
+                continue;
+            }
+            let trunk_h = 4 + (hash2(x, z, state.seed) % 2) as u32;
+            let leaves = BlockState::OAK_LEAVES.set(PropName::Persistent, PropValue::True);
+            for dy in trunk_h - 2..=trunk_h + 1 {
+                let r = if dy < trunk_h { 2_i32 } else { 1_i32 };
+                for lz in -r..=r {
+                    for lx in -r..=r {
+                        if lx == 0 && lz == 0 && dy <= trunk_h {
+                            continue;
+                        }
+                        // Round the canopy: plus-shaped cap, notched wide
+                        // corners.
+                        if r == 1 && dy == trunk_h + 1 && lx != 0 && lz != 0 {
+                            continue;
+                        }
+                        if r == 2
+                            && lx.abs() == 2
+                            && lz.abs() == 2
+                            && hash2(x + lx * 31, z + lz * 57 + dy as i32, state.seed)
+                                .is_multiple_of(2)
+                        {
+                            continue;
+                        }
+                        let (bx, bz, by) = (ox as i32 + lx, oz as i32 + lz, top + 1 + dy);
+                        if !(0..=15).contains(&bx)
+                            || !(0..=15).contains(&bz)
+                            || by >= chunk.height()
+                        {
+                            continue;
+                        }
+                        if chunk.block_state(bx as u32, by, bz as u32).is_air() {
+                            chunk.set_block_state(bx as u32, by, bz as u32, leaves);
+                        }
+                    }
+                }
+            }
+            for i in 1..=trunk_h {
+                chunk.set_block_state(ox, top + i, oz, BlockState::OAK_LOG);
+            }
+        }
+    }
 }
 
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
