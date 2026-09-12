@@ -1,5 +1,5 @@
 use chunkedge_binary::{Decode, Encode, VarInt};
-use chunkedge_math::DVec3;
+use chunkedge_math::Vec3;
 
 use crate::{BlockPos, Direction, Hand, Packet};
 
@@ -8,7 +8,7 @@ pub struct UseItemOnC2s {
     pub hand: Hand,
     pub position: BlockPos,
     pub face: Direction,
-    pub cursor_pos: DVec3,
+    pub cursor_pos: Vec3,
     pub head_inside_block: bool,
     pub world_border_hit: bool,
     pub sequence: VarInt,

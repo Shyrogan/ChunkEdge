@@ -10,5 +10,6 @@ const MAX_PAYLOAD_SIZE: usize = 0x200000;
 pub struct DebugChunkValueS2c<'a> {
     pub chunk_pos: ChunkPos,
     pub subscription: VarInt,
+    pub has_payload: bool,
     pub payload: Bounded<RawBytes<'a>, MAX_PAYLOAD_SIZE>,
 }

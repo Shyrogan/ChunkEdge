@@ -9,5 +9,6 @@ const MAX_PAYLOAD_SIZE: usize = 0x200000;
 pub struct DebugEntityValueS2c<'a> {
     pub entity_id: VarInt,
     pub subscription: VarInt,
+    pub has_payload: bool,
     pub payload: Bounded<RawBytes<'a>, MAX_PAYLOAD_SIZE>,
 }
