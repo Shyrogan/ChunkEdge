@@ -247,16 +247,16 @@ pub fn log_variant(name: &str) {
         if let Some(ctx) = c.borrow_mut().as_mut()
             && let Some(&active_idx) = ctx.active_path.last()
         {
-                let node = if ctx.active_path.len() == 1 {
-                    &mut ctx.roots[active_idx]
-                } else {
-                    let mut n = &mut ctx.roots[ctx.active_path[0]];
-                    for &idx in &ctx.active_path[1..ctx.active_path.len() - 1] {
-                        n = &mut n.children[idx];
-                    }
-                    &mut n.children[active_idx]
-                };
-                node.variant = Some(name.to_owned());
+            let node = if ctx.active_path.len() == 1 {
+                &mut ctx.roots[active_idx]
+            } else {
+                let mut n = &mut ctx.roots[ctx.active_path[0]];
+                for &idx in &ctx.active_path[1..ctx.active_path.len() - 1] {
+                    n = &mut n.children[idx];
+                }
+                &mut n.children[active_idx]
+            };
+            node.variant = Some(name.to_owned());
         }
     });
 }

@@ -232,8 +232,7 @@ pub(super) fn update_respawn_position(
         // overworld (no layer -> dimension mapping exists yet).
         client.write_packet(&SetDefaultSpawnPositionS2c {
             position: GlobalPos {
-                dimension_name: Ident::new("minecraft:overworld")
-                    .expect("invalid dimension ident"),
+                dimension_name: Ident::new("minecraft:overworld").expect("invalid dimension ident"),
                 position: respawn_pos.pos,
             },
             yaw: respawn_pos.yaw,

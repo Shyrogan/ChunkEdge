@@ -20,7 +20,7 @@ use chunkedge_binary::{Bounded, Decode, Encode};
 // To pass ci we convince the unused deps detector we do infact use this dep as the macros do
 #[allow(unused_imports)]
 use chunkedge_protocol::*;
-use chunkedge_protocol_macros::{debug_decode, Packet as DerivePacket};
+use chunkedge_protocol_macros::{Packet as DerivePacket, debug_decode};
 
 #[derive(Debug, Encode, Decode, DerivePacket)]
 #[packet(id = 100, side = PacketSide::Clientbound)]

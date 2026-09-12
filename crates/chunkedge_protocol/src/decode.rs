@@ -4,10 +4,10 @@ use anyhow::{Context, bail, ensure};
 use bytes::{Buf, BytesMut};
 use chunkedge_binary::{Decode, VarInt, VarIntDecodeError};
 
-#[cfg(any(feature = "debug-packets", feature = "debug-packets-on-error"))]
-use crate::debug;
 #[cfg(feature = "compression")]
 use crate::CompressionThreshold;
+#[cfg(any(feature = "debug-packets", feature = "debug-packets-on-error"))]
+use crate::debug;
 use crate::{MAX_PACKET_SIZE, Packet};
 
 /// The AES block cipher with a 128 bit key, using the CFB-8 mode of

@@ -6,9 +6,9 @@
 pub mod __private {
     pub use anyhow::{Context, Result, anyhow, bail, ensure};
 
+    pub use crate::Packet;
     #[cfg(any(feature = "debug-packets", feature = "debug-packets-on-error"))]
     pub use crate::debug;
-    pub use crate::Packet;
 }
 
 extern crate self as chunkedge_protocol;

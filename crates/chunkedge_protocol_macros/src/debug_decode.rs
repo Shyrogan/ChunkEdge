@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse2, Block, ImplItem, ImplItemFn, ItemImpl, Result, Type};
+use syn::{Block, ImplItem, ImplItemFn, ItemImpl, Result, Type, parse2};
 
 pub(super) fn debug_decode_impl(_args: TokenStream, input: TokenStream) -> Result<TokenStream> {
     let mut item: ItemImpl = parse2(input)?;

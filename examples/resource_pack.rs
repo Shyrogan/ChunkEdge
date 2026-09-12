@@ -92,10 +92,7 @@ fn init_clients(
     }
 }
 
-fn prompt_on_punch(
-    mut clients: Query<&mut Client>,
-    mut packets: MessageReader<PacketMessage>,
-) {
+fn prompt_on_punch(mut clients: Query<&mut Client>, mut packets: MessageReader<PacketMessage>) {
     for packet in packets.read() {
         // In 26.1 attacks arrive as their own packet rather than as an
         // interaction variant.

@@ -168,17 +168,41 @@ pub struct BiomeEffects {
     pub music_volume: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub particle: Option<BiomeParticle>,
-    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "deserialize_color"
+    )]
     pub sky_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "deserialize_color"
+    )]
     pub foliage_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "deserialize_color"
+    )]
     pub grass_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "deserialize_color"
+    )]
     pub fog_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "deserialize_color"
+    )]
     pub water_color: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_color")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "deserialize_color"
+    )]
     pub water_fog_color: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grass_color_modifier: Option<String>,

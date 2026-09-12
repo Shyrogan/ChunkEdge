@@ -126,7 +126,13 @@ mod tests {
             let decoded = LpVec3::decode(&mut &buf[..]).unwrap().0;
             // The format quantizes each component to 15 bits relative to the
             // shared scale, so allow about one quantization step of error.
-            let scale = vec.x.abs().max(vec.y.abs()).max(vec.z.abs()).ceil().max(1.0);
+            let scale = vec
+                .x
+                .abs()
+                .max(vec.y.abs())
+                .max(vec.z.abs())
+                .ceil()
+                .max(1.0);
             let tolerance = scale / 32766.0 * 1.5 + 0.0001;
             for (a, b) in [vec.x, vec.y, vec.z]
                 .into_iter()

@@ -71,10 +71,8 @@ impl Section {
         fn is_fluid(state: BlockState) -> bool {
             // Mirrors vanilla counting non-empty fluid states: water and lava
             // source/flowing blocks, plus any waterlogged state.
-            matches!(
-                state.to_kind(),
-                BlockKind::Water | BlockKind::Lava
-            ) || state.get(PropName::Waterlogged) == Some(PropValue::True)
+            matches!(state.to_kind(), BlockKind::Water | BlockKind::Lava)
+                || state.get(PropName::Waterlogged) == Some(PropValue::True)
         }
 
         let mut count = 0;
@@ -586,9 +584,7 @@ impl LoadedChunk {
                     .encode(&mut blocks_and_biomes)
                     .unwrap();
 
-                sect.count_fluids()
-                    .encode(&mut blocks_and_biomes)
-                    .unwrap();
+                sect.count_fluids().encode(&mut blocks_and_biomes).unwrap();
 
                 sect.block_states
                     .encode_mc_format(

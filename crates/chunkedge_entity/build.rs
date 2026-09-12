@@ -242,7 +242,7 @@ impl Value {
             Value::OptionalTextComponent(t) => match t {
                 Some(txt) => quote!(Some(chunkedge_protocol::Text::text(#txt))),
                 None => quote!(None),
-            }
+            },
             Value::ItemStack(_stack) => {
                 quote!(chunkedge_protocol::ItemStack::default())
             }
