@@ -79,7 +79,7 @@ impl Encode for LpVec3 {
 impl Decode<'_> for LpVec3 {
     fn decode(r: &mut &[u8]) -> anyhow::Result<Self> {
         ensure!(!r.is_empty(), "unexpected end of input decoding LpVec3");
-        let lowest = r[0] as u64;
+        let lowest = u64::from(r[0]);
         *r = &r[1..];
 
         if lowest == 0 {
@@ -87,11 +87,11 @@ impl Decode<'_> for LpVec3 {
         }
 
         ensure!(r.len() >= 5, "unexpected end of input decoding LpVec3");
-        let middle = r[0] as u64;
-        let highest = u32::from_le_bytes([r[1], r[2], r[3], r[4]]) as u64;
+        let middle = u64::from(r[0]);
+        let highest = u64::from(u32::from_le_bytes([r[1], r[2], r[3], r[4]]));
         *r = &r[5..];
 
-        let mut buffer = highest << 16 | middle << 8 | lowest;
+        let buffer = highest << 16 | middle << 8 | lowest;
 
         let mut scale = lowest & SCALE_BITS_MASK;
         if lowest & CONTINUATION_FLAG == CONTINUATION_FLAG {

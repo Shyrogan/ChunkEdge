@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::query::QueryData;
-use chunkedge_entity::{EntityId, EntityLayerId, EntityManager};
+use chunkedge_entity::{EntityLayerId, EntityManager};
 use chunkedge_protocol::packets::play::game_event_s2c::GameEventKind;
 use chunkedge_protocol::packets::play::respawn_s2c::DataKeptFlags;
 use chunkedge_protocol::packets::play::{
@@ -233,8 +233,7 @@ pub(super) fn update_respawn_position(
         client.write_packet(&SetDefaultSpawnPositionS2c {
             position: GlobalPos {
                 dimension_name: Ident::new("minecraft:overworld")
-                    .expect("invalid dimension ident")
-                    .into(),
+                    .expect("invalid dimension ident"),
                 position: respawn_pos.pos,
             },
             yaw: respawn_pos.yaw,

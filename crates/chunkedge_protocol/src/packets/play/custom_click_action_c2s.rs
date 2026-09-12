@@ -22,7 +22,7 @@ pub struct CustomClickActionC2s<'a> {
 
 /// Length-prefixed optional NBT, as used by vanilla
 /// `ByteBufCodecs.optionalTagCodec(...).apply(ByteBufCodecs.lengthPrefixed(..))`:
-/// a VarInt byte count followed by the TAG bytes. An absent payload is a
+/// a `VarInt` byte count followed by the TAG bytes. An absent payload is a
 /// count of one followed by a single `TAG_End` byte.
 #[derive(Clone, Debug, Default)]
 pub struct LengthPrefixedNbt(pub Option<Compound>);

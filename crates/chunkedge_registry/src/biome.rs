@@ -15,7 +15,6 @@ use bevy_ecs::prelude::*;
 use chunkedge_ident::{Ident, ident};
 use chunkedge_nbt::serde::ser::CompoundSerializer;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::BTreeMap;
 use tracing::error;
 
 use crate::codec::{RegistryCodec, RegistryValue};
@@ -117,11 +116,6 @@ pub struct Biome {
     pub temperature: f32,
     pub downfall: f32,
     pub effects: BiomeEffects,
-    /// Environment attributes introduced in 26.1 (visual colors, audio, …).
-    /// These are preserved verbatim in the login codec, but are not
-    /// re-serialized if the registry is mutated at runtime.
-    #[serde(default, skip_serializing)]
-    pub attributes: BTreeMap<String, serde::de::IgnoredAny>,
 }
 
 impl Default for Biome {
@@ -132,7 +126,6 @@ impl Default for Biome {
             temperature: 0.8,
             downfall: 0.4,
             effects: BiomeEffects::default(),
-            attributes: BTreeMap::new(),
         }
     }
 }

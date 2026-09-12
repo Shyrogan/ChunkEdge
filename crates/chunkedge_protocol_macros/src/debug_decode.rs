@@ -11,11 +11,11 @@ pub(super) fn debug_decode_impl(_args: TokenStream, input: TokenStream) -> Resul
 
     // Find and rewrite the `decode` method.
     for impl_item in &mut item.items {
-        if let ImplItem::Fn(method) = impl_item {
-            if method.sig.ident == "decode" {
-                rewrite_decode_body(method, &type_name_str);
-                break;
-            }
+        if let ImplItem::Fn(method) = impl_item
+            && method.sig.ident == "decode"
+        {
+            rewrite_decode_body(method, &type_name_str);
+            break;
         }
     }
 

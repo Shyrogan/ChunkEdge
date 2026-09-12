@@ -13,7 +13,6 @@ use bevy_ecs::prelude::*;
 use chunkedge_ident::{Ident, ident};
 use chunkedge_nbt::serde::ser::CompoundSerializer;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use tracing::error;
 
 use crate::codec::{RegistryCodec, RegistryValue};
@@ -137,10 +136,6 @@ pub struct DimensionType {
     pub min_y: i32,
     pub monster_spawn_block_light_limit: i32,
     pub monster_spawn_light_level: MonsterSpawnLightLevel,
-    /// Environment attributes introduced in 26.1. Preserved verbatim in the
-    /// login codec, but not re-serialized on runtime mutation.
-    #[serde(default, skip_serializing)]
-    pub attributes: BTreeMap<String, serde::de::IgnoredAny>,
     /// Timelines (world clocks) reference, e.g. `"#minecraft:in_overworld"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timelines: Option<String>,
@@ -170,7 +165,6 @@ impl Default for DimensionType {
             monster_spawn_block_light_limit: 0,
             monster_spawn_light_level: MonsterSpawnLightLevel::Int(7),
             has_ender_dragon_fight: false,
-            attributes: BTreeMap::new(),
             timelines: None,
             default_clock: None,
             skybox: None,

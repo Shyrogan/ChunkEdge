@@ -1,6 +1,5 @@
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
-use chunkedge_entity::HumanoidArm;
 use chunkedge_entity::avatar::{DataPlayerMainHand, DataPlayerModeCustomisation};
 use chunkedge_protocol::packets::configuration::client_information_c2s::ParticleMode;
 use chunkedge_protocol::packets::play::ClientInformationC2s;

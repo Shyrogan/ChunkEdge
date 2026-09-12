@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use chunkedge_binary::{Bounded, Decode, Encode, RawBytes, VarInt};
 
 use crate::Packet;

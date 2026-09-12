@@ -244,8 +244,9 @@ pub fn log_field_start(field_name: Option<&str>, type_name: &str) {
 /// Print a variant selection line (for enum decoding).
 pub fn log_variant(name: &str) {
     CTX.with(|c| {
-        if let Some(ctx) = c.borrow_mut().as_mut() {
-            if let Some(&active_idx) = ctx.active_path.last() {
+        if let Some(ctx) = c.borrow_mut().as_mut()
+            && let Some(&active_idx) = ctx.active_path.last()
+        {
                 let node = if ctx.active_path.len() == 1 {
                     &mut ctx.roots[active_idx]
                 } else {
@@ -256,7 +257,6 @@ pub fn log_variant(name: &str) {
                     &mut n.children[active_idx]
                 };
                 node.variant = Some(name.to_owned());
-            }
         }
     });
 }

@@ -1,6 +1,6 @@
 use chunkedge_binary::{Decode, Encode};
 
-use crate::{BlockPos, GlobalPos, Packet};
+use crate::{GlobalPos, Packet};
 
 #[derive(Clone, Debug, Encode, Decode, Packet)]
 pub struct SetDefaultSpawnPositionS2c<'a> {
