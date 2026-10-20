@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::query::QueryData;
-use chunkedge_entity::{EntityLayerId, EntityManager};
+use chunkedge_entity::{EntityId, EntityLayerId};
 use chunkedge_protocol::packets::play::game_event_s2c::GameEventKind;
 use chunkedge_protocol::packets::play::respawn_s2c::DataKeptFlags;
 use chunkedge_protocol::packets::play::{
@@ -92,15 +92,21 @@ pub struct ClientSpawnQuery {
 pub(super) fn initial_join(
     codec: Res<RegistryCodec>,
     tags: Res<TagsRegistry>,
-    mut clients: Query<(&mut Client, &VisibleChunkLayer, ClientSpawnQueryReadOnly), Added<Client>>,
+    mut clients: Query<
+        (
+            &mut Client,
+            &EntityId,
+            &VisibleChunkLayer,
+            ClientSpawnQueryReadOnly,
+        ),
+        Added<Client>,
+    >,
     chunk_layers: Query<&ChunkLayer>,
-    mut entities: ResMut<EntityManager>,
 ) {
-    for (mut client, visible_chunk_layer, spawn) in &mut clients {
-        // Assign a real protocol entity ID. ID 0 means "unassigned" to
-        // vanilla clients (Entity.getId() throws), so clients share the
-        // same counter as every other entity.
-        client.entity_id = entities.next_id();
+    for (mut client, entity_id, visible_chunk_layer, spawn) in &mut clients {
+        // The client knows itself by its own entity ID. ID 0 means "unassigned"
+        // to vanilla clients, so it can't be used as a shortcut for "self".
+        client.entity_id = *entity_id;
         let Ok(chunk_layer) = chunk_layers.get(visible_chunk_layer.0) else {
             continue;
         };
@@ -120,10 +126,8 @@ pub(super) fn initial_join(
 
         // The login packet is prepended so that it's sent before all the other packets.
         // Some packets don't work correctly when sent before the game join packet.
-        // Copy the ID out first: prepend_packet borrows the encoder mutably.
-        let entity_id = client.entity_id.get();
         _ = client.enc.prepend_packet(&LoginS2c {
-            entity_id,
+            entity_id: entity_id.get(),
             is_hardcore: spawn.is_hardcore.0,
             game_mode: *spawn.game_mode,
             previous_game_mode: spawn.prev_game_mode.0.into(),

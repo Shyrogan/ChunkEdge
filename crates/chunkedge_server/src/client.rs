@@ -252,11 +252,9 @@ pub struct ClientMarker;
 pub struct Client {
     conn: Box<dyn ClientConnection>,
     pub(crate) enc: PacketEncoder,
-    /// The client's protocol entity ID, assigned at join time.
-    ///
-    /// In 26.x, entity ID 0 means "unassigned" to vanilla clients, so
-    /// clients must receive a real nonzero ID like any other entity.
-    pub entity_id: EntityId,
+    /// Copy of the client's [`EntityId`] component, set at join time, so
+    /// methods on `Client` can address packets to the client's own entity.
+    pub(crate) entity_id: EntityId,
 }
 
 /// Represents the bidirectional packet channel between the server and a client
@@ -338,7 +336,7 @@ impl Client {
     /// killed the player, you should supply it as `killer`.
     pub fn kill<'a, M: IntoText<'a>>(&mut self, message: M) {
         self.write_packet(&PlayerCombatKillS2c {
-            player_id: VarInt(0),
+            player_id: VarInt(self.entity_id.get()),
             message: message.into_cow_text_component(),
         });
     }
@@ -456,7 +454,7 @@ impl EntityRemoveBuf {
     pub fn push(&mut self, entity_id: i32) {
         debug_assert!(
             entity_id != 0,
-            "removing entity with protocol ID 0 (which should be reserved for clients)"
+            "removing entity with protocol ID 0 (which means unassigned)"
         );
 
         self.0.push(VarInt(entity_id));
@@ -1290,22 +1288,24 @@ fn flush_packets(
     }
 }
 
-fn init_tracked_data(mut clients: Query<(&mut Client, &TrackedData), Added<TrackedData>>) {
-    for (mut client, tracked_data) in &mut clients {
+fn init_tracked_data(
+    mut clients: Query<(&mut Client, &EntityId, &TrackedData), Added<TrackedData>>,
+) {
+    for (mut client, id, tracked_data) in &mut clients {
         if let Some(init_data) = tracked_data.init_data() {
             client.write_packet(&SetEntityDataS2c {
-                entity_id: VarInt(0),
+                entity_id: VarInt(id.get()),
                 tracked_values: init_data.into(),
             });
         }
     }
 }
 
-fn update_tracked_data(mut clients: Query<(&mut Client, &TrackedData)>) {
-    for (mut client, tracked_data) in &mut clients {
+fn update_tracked_data(mut clients: Query<(&mut Client, &EntityId, &TrackedData)>) {
+    for (mut client, id, tracked_data) in &mut clients {
         if let Some(update_data) = tracked_data.update_data() {
             client.write_packet(&SetEntityDataS2c {
-                entity_id: VarInt(0),
+                entity_id: VarInt(id.get()),
                 tracked_values: update_data.into(),
             });
         }
@@ -1313,22 +1313,24 @@ fn update_tracked_data(mut clients: Query<(&mut Client, &TrackedData)>) {
 }
 
 fn init_tracked_attributes(
-    mut clients: Query<(&mut Client, &EntityAttributes), Added<EntityAttributes>>,
+    mut clients: Query<(&mut Client, &EntityId, &EntityAttributes), Added<EntityAttributes>>,
 ) {
-    for (mut client, attributes) in &mut clients {
+    for (mut client, id, attributes) in &mut clients {
         client.write_packet(&UpdateAttributesS2c {
-            entity_id: VarInt(0),
+            entity_id: VarInt(id.get()),
             properties: attributes.to_properties(),
         });
     }
 }
 
-fn update_tracked_attributes(mut clients: Query<(&mut Client, &TrackedEntityAttributes)>) {
-    for (mut client, attributes) in &mut clients {
+fn update_tracked_attributes(
+    mut clients: Query<(&mut Client, &EntityId, &TrackedEntityAttributes)>,
+) {
+    for (mut client, id, attributes) in &mut clients {
         let properties = attributes.get_properties();
         if !properties.is_empty() {
             client.write_packet(&UpdateAttributesS2c {
-                entity_id: VarInt(0),
+                entity_id: VarInt(id.get()),
                 properties,
             });
         }

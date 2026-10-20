@@ -47,8 +47,9 @@ fn passengers_broadcast_on_mount_and_dismount() {
     let pkt = recvd.first::<SetPassengersS2c>();
     assert_eq!(pkt.passengers.len(), 1, "vehicle should have one passenger");
     assert_eq!(
-        pkt.passengers[0].0, 0,
-        "the riding client should see its own entity as ID 0 so it mounts itself"
+        pkt.passengers[0].0,
+        app.world().get::<EntityId>(client).unwrap().get(),
+        "the riding client should see its own entity ID so it mounts itself"
     );
 
     helper.clear_received();
