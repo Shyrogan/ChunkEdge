@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::query::QueryData;
-use chunkedge_entity::EntityLayerId;
+use chunkedge_entity::{EntityLayerId, EntityManager};
 use chunkedge_protocol::packets::play::game_event_s2c::GameEventKind;
 use chunkedge_protocol::packets::play::respawn_s2c::DataKeptFlags;
 use chunkedge_protocol::packets::play::{
@@ -67,6 +67,8 @@ pub struct RespawnPosition {
     pub pos: BlockPos,
     /// The yaw angle that clients will respawn with (in degrees).
     pub yaw: f32,
+    /// The pitch angle that clients will respawn with (in degrees).
+    pub pitch: f32,
 }
 
 /// A convenient [`QueryData`] for obtaining client spawn components. Also see
@@ -92,8 +94,13 @@ pub(super) fn initial_join(
     tags: Res<TagsRegistry>,
     mut clients: Query<(&mut Client, &VisibleChunkLayer, ClientSpawnQueryReadOnly), Added<Client>>,
     chunk_layers: Query<&ChunkLayer>,
+    mut entities: ResMut<EntityManager>,
 ) {
     for (mut client, visible_chunk_layer, spawn) in &mut clients {
+        // Assign a real protocol entity ID. ID 0 means "unassigned" to
+        // vanilla clients (Entity.getId() throws), so clients share the
+        // same counter as every other entity.
+        client.entity_id = entities.next_id();
         let Ok(chunk_layer) = chunk_layers.get(visible_chunk_layer.0) else {
             continue;
         };
@@ -113,8 +120,10 @@ pub(super) fn initial_join(
 
         // The login packet is prepended so that it's sent before all the other packets.
         // Some packets don't work correctly when sent before the game join packet.
+        // Copy the ID out first: prepend_packet borrows the encoder mutably.
+        let entity_id = client.entity_id.get();
         _ = client.enc.prepend_packet(&LoginS2c {
-            entity_id: 0, // We reserve ID 0 for clients.
+            entity_id,
             is_hardcore: spawn.is_hardcore.0,
             game_mode: *spawn.game_mode,
             previous_game_mode: spawn.prev_game_mode.0.into(),
@@ -132,6 +141,8 @@ pub(super) fn initial_join(
             portal_cooldown: VarInt(spawn.portal_cooldown.0),
             do_limited_crafting: false, // TODO
             dimension_type: VarInt(dimension_type.get_value().into()),
+            // TODO: picks up the actual connection mode instead of assuming online.
+            online_mode: true,
             enforeces_secure_chat: true,
             // FIXME: add missing sea_level
             sea_level: VarInt(0),
@@ -217,9 +228,15 @@ pub(super) fn update_respawn_position(
     mut clients: Query<(&mut Client, &RespawnPosition), Changed<RespawnPosition>>,
 ) {
     for (mut client, respawn_pos) in &mut clients {
+        // TODO: picks up the actual spawn dimension instead of assuming
+        // overworld (no layer -> dimension mapping exists yet).
         client.write_packet(&SetDefaultSpawnPositionS2c {
-            position: respawn_pos.pos,
-            angle: respawn_pos.yaw,
+            position: GlobalPos {
+                dimension_name: Ident::new("minecraft:overworld").expect("invalid dimension ident"),
+                position: respawn_pos.pos,
+            },
+            yaw: respawn_pos.yaw,
+            pitch: respawn_pos.pitch,
         });
     }
 }

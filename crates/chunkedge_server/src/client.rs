@@ -12,15 +12,14 @@ use byteorder::{NativeEndian, ReadBytesExt};
 use bytes::{Bytes, BytesMut};
 use chunkedge_binary::Encode;
 use chunkedge_entity::attributes::{EntityAttributes, TrackedEntityAttributes};
+use chunkedge_entity::avatar::{DataPlayerMainHand, DataPlayerModeCustomisation};
 use chunkedge_entity::living::Health;
-use chunkedge_entity::player::{
-    Food, MainArm as PlayerMainArm, PlayerEntity, PlayerModelParts, Saturation,
-};
-use chunkedge_entity::query::EntityInitQuery;
+use chunkedge_entity::player::{Food, PlayerEntity, Saturation};
 use chunkedge_entity::tracked_data::TrackedData;
 use chunkedge_entity::{
     ClearEntityChangesSet, EntityId, EntityLayerId, EntityStatus, OldPosition, Position, Velocity,
 };
+use chunkedge_entity::{HumanoidArm, query::EntityInitQuery};
 use chunkedge_math::{DVec3, Vec3};
 use chunkedge_protocol::encode::{PacketEncoder, WritePacket};
 use chunkedge_protocol::packets::configuration::client_information_c2s::ParticleMode;
@@ -151,8 +150,8 @@ pub struct ClientBundle {
     pub player: PlayerEntity,
     pub uuid: UniqueId,
     pub layer: EntityLayerId,
-    pub player_model_parts: PlayerModelParts,
-    pub main_arm: PlayerMainArm,
+    pub player_model_parts: DataPlayerModeCustomisation,
+    pub main_arm: DataPlayerMainHand,
 }
 
 impl ClientBundle {
@@ -162,6 +161,7 @@ impl ClientBundle {
             client: Client {
                 conn: args.conn,
                 enc: args.enc,
+                entity_id: EntityId::default(),
             },
             settings: crate::client_settings::ClientSettings {
                 locale: args.locale.into_boxed_str(),
@@ -203,8 +203,10 @@ impl ClientBundle {
             player: PlayerEntity,
             uuid: UniqueId(args.uuid),
             layer: Default::default(),
-            player_model_parts: PlayerModelParts(u8::from(args.displayed_skin_parts) as i8),
-            main_arm: PlayerMainArm(args.main_arm as i8),
+            player_model_parts: DataPlayerModeCustomisation(
+                u8::from(args.displayed_skin_parts) as i8
+            ),
+            main_arm: DataPlayerMainHand(map_main_arm(args.main_arm)),
         }
     }
 }
@@ -250,6 +252,11 @@ pub struct ClientMarker;
 pub struct Client {
     conn: Box<dyn ClientConnection>,
     pub(crate) enc: PacketEncoder,
+    /// The client's protocol entity ID, assigned at join time.
+    ///
+    /// In 26.x, entity ID 0 means "unassigned" to vanilla clients, so
+    /// clients must receive a real nonzero ID like any other entity.
+    pub entity_id: EntityId,
 }
 
 /// Represents the bidirectional packet channel between the server and a client
@@ -397,7 +404,7 @@ impl Client {
     /// `velocity` is in m/s.
     pub fn set_velocity<V: Into<DVec3>>(&mut self, velocity: V) {
         self.write_packet(&SetEntityMotionS2c {
-            entity_id: VarInt(0),
+            entity_id: VarInt(self.entity_id.get()),
             velocity: Velocity(velocity.into()).to_packet_units(),
         });
     }
@@ -407,7 +414,7 @@ impl Client {
     /// The status is only visible to this client.
     pub fn trigger_status(&mut self, status: EntityStatus) {
         self.write_packet(&EntityEventS2c {
-            entity_id: 0,
+            entity_id: self.entity_id.get(),
             entity_status: status as u8,
         });
     }
@@ -635,6 +642,14 @@ impl OldVisibleEntityLayers {
 
 /// A system for adding [`Despawned`] components to disconnected clients. This
 /// works by listening for removed [`Client`] components.
+/// Maps the protocol-level main-arm setting to the entity metadata enum.
+pub(crate) fn map_main_arm(arm: MainArm) -> HumanoidArm {
+    match arm {
+        MainArm::Left => HumanoidArm::Left,
+        MainArm::Right => HumanoidArm::Right,
+    }
+}
+
 pub fn despawn_disconnected_clients(
     mut commands: Commands,
     mut disconnected_clients: RemovedComponents<Client>,

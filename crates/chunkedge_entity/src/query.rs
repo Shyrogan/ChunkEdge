@@ -121,7 +121,9 @@ impl UpdateEntityQueryItem<'_, '_> {
             writer.write_packet(&EntityPositionSyncS2c {
                 entity_id,
                 position: self.pos.0,
-                velocity: self.velocity.0,
+                // Vanilla `PositionMoveRotation.deltaMovement` is in blocks
+                // per tick, while this component is in m/s.
+                velocity: self.velocity.0 / 20.0,
                 yaw: self.look.yaw,
                 pitch: self.look.pitch,
                 on_ground: self.on_ground.0,
