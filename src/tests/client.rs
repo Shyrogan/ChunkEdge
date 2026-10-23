@@ -11,6 +11,7 @@ use crate::protocol::packets::play::{
     AcceptTeleportationC2s, LoginS2c, MoveEntityPosS2c, MovePlayerPosRotC2s, PlayerCombatKillS2c,
     PlayerPositionS2c, SetEntityDataS2c,
 };
+use crate::teleport::TeleportState;
 use crate::testing::{ScenarioSingleClient, create_mock_client};
 use crate::{ChunkPos, GameMode};
 
@@ -159,4 +160,32 @@ fn client_knows_itself_by_its_entity_id() {
         recvd.first::<PlayerCombatKillS2c>().player_id,
         VarInt(entity_id)
     );
+}
+
+#[test]
+fn unexpected_teleport_confirmation_disconnects_without_panicking() {
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    app.update();
+    helper.confirm_initial_pending_teleports();
+    app.update();
+
+    // No teleport is pending, but the client confirms the next teleport ID
+    // anyway. This used to underflow the pending teleport counter.
+    let next_id = app
+        .world()
+        .get::<TeleportState>(client)
+        .unwrap()
+        .teleport_id_counter();
+    helper.send(&AcceptTeleportationC2s {
+        teleport_id: (next_id as i32).into(),
+    });
+    app.update();
+
+    assert!(app.world().get::<Client>(client).is_none());
 }

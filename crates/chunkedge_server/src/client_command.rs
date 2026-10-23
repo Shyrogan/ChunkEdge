@@ -18,6 +18,7 @@ impl Plugin for ClientCommandPlugin {
             .add_message::<SneakMessage>()
             .add_message::<JumpWithHorseMessage>()
             .add_message::<LeaveBedMessage>()
+            .init_resource::<LastSneaking>()
             .add_systems(
                 EventLoopPreUpdate,
                 (handle_client_command, handle_player_input),
@@ -131,6 +132,10 @@ fn handle_client_command(
     }
 }
 
+/// Last sneak input received from each client, used to detect sneak changes.
+#[derive(Resource, Default, Debug)]
+pub(crate) struct LastSneaking(HashMap<Entity, bool>);
+
 /// Tracks sneaking from [`PlayerInputC2s`].
 ///
 /// The sprint input bit is only the sprint key state. Actual sprinting comes
@@ -139,12 +144,13 @@ pub(crate) fn handle_player_input(
     mut packets: MessageReader<PacketMessage>,
     mut clients: Query<(&mut entity::Pose, &mut Flags)>,
     mut sneaking_messages: MessageWriter<SneakMessage>,
-    mut last_sneaking: Local<HashMap<Entity, bool>>,
+    mut last_sneaking: ResMut<LastSneaking>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<PlayerInputC2s>() {
             let sneak = pkt.flags.sneak();
             let was_sneaking = last_sneaking
+                .0
                 .get(&packet.client)
                 .copied()
                 .unwrap_or_default();
@@ -169,7 +175,62 @@ pub(crate) fn handle_player_input(
                 });
             }
 
-            last_sneaking.insert(packet.client, sneak);
+            last_sneaking.0.insert(packet.client, sneak);
         }
+    }
+
+    // Forget entities that no longer exist so join/leave churn cannot grow the map
+    // without bound.
+    last_sneaking
+        .0
+        .retain(|&entity, _| clients.contains(entity));
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Instant;
+
+    use chunkedge_binary::Encode;
+    use chunkedge_protocol::Packet;
+    use chunkedge_protocol::packets::play::player_input_c2s::PlayerInputFlags;
+
+    use super::*;
+
+    fn sneak_packet(client: Entity) -> PacketMessage {
+        let mut data = vec![];
+        PlayerInputC2s {
+            flags: PlayerInputFlags::new().with_sneak(true),
+        }
+        .encode(&mut data)
+        .unwrap();
+
+        PacketMessage {
+            client,
+            timestamp: Instant::now(),
+            id: PlayerInputC2s::ID,
+            data: data.into(),
+        }
+    }
+
+    #[test]
+    fn sneak_state_is_dropped_for_despawned_clients() {
+        let mut app = App::new();
+        app.add_message::<PacketMessage>()
+            .add_message::<SneakMessage>()
+            .init_resource::<LastSneaking>()
+            .add_systems(Update, handle_player_input);
+
+        let client = app
+            .world_mut()
+            .spawn((entity::Pose::default(), Flags::default()))
+            .id();
+
+        app.world_mut().write_message(sneak_packet(client));
+        app.update();
+        assert_eq!(app.world().resource::<LastSneaking>().0.len(), 1);
+
+        app.world_mut().despawn(client);
+        app.update();
+        assert!(app.world().resource::<LastSneaking>().0.is_empty());
     }
 }
