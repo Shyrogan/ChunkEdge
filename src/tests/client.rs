@@ -13,6 +13,7 @@ use crate::protocol::packets::play::{
     PlayerCombatKillS2c, PlayerPositionS2c, SetEntityDataS2c, SetEntityMotionS2c,
 };
 use crate::protocol::{Packet, VarInt};
+use crate::teleport::TeleportState;
 use crate::testing::{ScenarioSingleClient, create_mock_client};
 use crate::{ChunkPos, GameMode};
 
@@ -334,4 +335,32 @@ fn set_velocity_is_reported_as_the_client_reads_it() {
         0,
         "each velocity is reported once"
     );
+}
+
+#[test]
+fn unexpected_teleport_confirmation_disconnects_without_panicking() {
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    app.update();
+    helper.confirm_initial_pending_teleports();
+    app.update();
+
+    // No teleport is pending, but the client confirms the next teleport ID
+    // anyway. This used to underflow the pending teleport counter.
+    let next_id = app
+        .world()
+        .get::<TeleportState>(client)
+        .unwrap()
+        .teleport_id_counter();
+    helper.send(&AcceptTeleportationC2s {
+        teleport_id: (next_id as i32).into(),
+    });
+    app.update();
+
+    assert!(app.world().get::<Client>(client).is_none());
 }

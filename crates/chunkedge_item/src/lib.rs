@@ -1,6 +1,7 @@
 mod components;
 mod cost;
 mod impls;
+mod limits;
 mod stack;
 mod template;
 mod vanilla_components;
@@ -456,8 +457,13 @@ mod tests {
             assert_eq!(bytes, expected, "encoding {component:?}");
 
             let mut r = bytes.as_slice();
-            let decoded = impls::decode_item_component(&mut r, component.id() as usize, 0)
-                .unwrap_or_else(|e| panic!("decoding {component:?}: {e:#}"));
+            let decoded = impls::decode_item_component(
+                &mut r,
+                component.id() as usize,
+                0,
+                &mut crate::limits::DecodeBudget::new(),
+            )
+            .unwrap_or_else(|e| panic!("decoding {component:?}: {e:#}"));
             assert_eq!(decoded, component);
             assert!(r.is_empty(), "{component:?} left {} bytes", r.len());
         }

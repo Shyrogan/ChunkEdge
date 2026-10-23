@@ -41,8 +41,32 @@ impl<'a, T: Decode<'a> + Encode + Clone + Debug + PartialEq> Decode<'a> for IdOr
             let value = T::decode(buf)?;
             Ok(Self::Inline(value))
         } else {
-            let registry_id = RegistryId::new(id.0 - 1);
+            let id =
+                id.0.checked_sub(1)
+                    .ok_or_else(|| anyhow::anyhow!("registry ID {} out of range", id.0))?;
+            let registry_id = RegistryId::new(id);
             Ok(Self::Id(registry_id))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_id_overflow() {
+        let mut buf = vec![];
+        VarInt(i32::MIN).encode(&mut buf).unwrap();
+        assert!(IdOr::<VarInt>::decode(&mut buf.as_slice()).is_err());
+    }
+
+    #[test]
+    fn round_trip() {
+        for value in [IdOr::id(RegistryId::new(5)), IdOr::inline(VarInt(9))] {
+            let mut buf = vec![];
+            value.encode(&mut buf).unwrap();
+            assert_eq!(IdOr::<VarInt>::decode(&mut buf.as_slice()).unwrap(), value);
         }
     }
 }

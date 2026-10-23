@@ -2,7 +2,9 @@ use std::io::Write;
 
 use chunkedge_generated::registry_id::RegistryId;
 
-use crate::{Decode, Encode, VarInt};
+use anyhow::ensure;
+
+use crate::{Decode, Encode, VarInt, cautious_capacity};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 /// Represents a set of IDs in a certain registry, either directly (enumerated
@@ -43,11 +45,35 @@ impl<'a> Decode<'a> for IDSet {
             let tag_name = String::decode(r)?;
             Ok(IDSet::NamedSet(tag_name))
         } else {
-            let mut ids = Vec::with_capacity((type_id - 1) as usize);
-            for _ in 0..(type_id - 1) {
+            ensure!(type_id > 0, "negative ID set length of {type_id}");
+            let len = (type_id - 1) as usize;
+            let mut ids = Vec::with_capacity(cautious_capacity::<RegistryId>(len));
+            for _ in 0..len {
                 ids.push(RegistryId::new(VarInt::decode(r)?.0));
             }
             Ok(IDSet::AdHocSet(ids))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decode_from(type_id: i32) -> anyhow::Result<IDSet> {
+        let mut buf = vec![];
+        VarInt(type_id).encode(&mut buf).unwrap();
+        IDSet::decode(&mut buf.as_slice())
+    }
+
+    #[test]
+    fn rejects_negative_length() {
+        assert!(decode_from(-1).is_err());
+        assert!(decode_from(i32::MIN).is_err());
+    }
+
+    #[test]
+    fn huge_length_fails_on_short_input() {
+        assert!(decode_from(i32::MAX).is_err());
     }
 }
