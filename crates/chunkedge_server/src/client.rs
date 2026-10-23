@@ -39,7 +39,7 @@ use chunkedge_protocol::packets::play::{
 use chunkedge_protocol::profile::Property;
 use chunkedge_protocol::sound::{Sound, SoundCategory, SoundDirect, SoundId};
 use chunkedge_protocol::text::{IntoText, Text};
-use chunkedge_protocol::{BlockPos, ChunkPos, GameMode, IntoTextComponent, Packet, VarInt};
+use chunkedge_protocol::{BlockPos, ChunkPos, GameMode, IntoTextComponent, LpVec3, Packet, VarInt};
 use chunkedge_registry::RegistrySet;
 use chunkedge_server_common::{Despawned, UniqueId};
 use derive_more::{Deref, DerefMut, From, Into};
@@ -92,7 +92,9 @@ impl Plugin for ClientPlugin {
                     init_tracked_attributes,
                 )
                     .in_set(UpdateClientsSet),
-                flush_packets.in_set(FlushPacketsSet),
+                (report_sent_velocities, flush_packets)
+                    .chain()
+                    .in_set(FlushPacketsSet),
             ),
         )
         .configure_sets(PreUpdate, SpawnClientsSet)
@@ -108,7 +110,8 @@ impl Plugin for ClientPlugin {
             ),
         )
         .add_message::<LoadEntityForClientMessage>()
-        .add_message::<UnloadEntityForClientMessage>();
+        .add_message::<UnloadEntityForClientMessage>()
+        .add_message::<ClientVelocityMessage>();
     }
 }
 
@@ -168,6 +171,7 @@ impl ClientBundle {
                 enc: args.enc,
                 entity_id,
                 online_mode: args.online_mode,
+                sent_velocities: vec![],
             },
             settings: crate::client_settings::ClientSettings {
                 locale: args.locale.into_boxed_str(),
@@ -264,6 +268,9 @@ pub struct Client {
     /// Copy of the client's [`EntityId`] component, allocated at construction, so
     /// methods on `Client` can address packets to the client's own entity.
     pub(crate) entity_id: EntityId,
+    /// Velocities written for the client's own entity since the last report,
+    /// in blocks per tick, as handed to the encoder.
+    sent_velocities: Vec<LpVec3>,
 }
 
 /// Represents the bidirectional packet channel between the server and a client
@@ -408,12 +415,16 @@ impl Client {
         });
     }
 
-    /// `velocity` is in m/s.
+    /// Replaces the velocity of the client's own player. `velocity` is in m/s.
+    ///
+    /// Every call is reported as a [`ClientVelocityMessage`].
     pub fn set_velocity<V: Into<DVec3>>(&mut self, velocity: V) {
+        let velocity = Velocity(velocity.into()).to_packet_units();
         self.write_packet(&SetEntityMotionS2c {
             entity_id: VarInt(self.entity_id.get()),
-            velocity: Velocity(velocity.into()).to_packet_units(),
+            velocity,
         });
+        self.sent_velocities.push(velocity);
     }
 
     /// Triggers an [`EntityStatus`].
@@ -954,6 +965,46 @@ pub struct LoadEntityForClientMessage {
     pub client: Entity,
     /// The entity that will be loaded.
     pub entity_loaded: Entity,
+}
+
+/// The server replaced the velocity of a client's own player with
+/// [`Client::set_velocity`].
+///
+/// Written in [`FlushPacketsSet`] for every velocity whose packet is flushed
+/// that tick, in the order they were set. Read it after [`FlushPacketsSet`]
+/// or on the next tick.
+#[derive(Debug, Clone, Copy, PartialEq, Message)]
+pub struct ClientVelocityMessage {
+    /// The client whose player received the velocity.
+    pub client: Entity,
+    /// The velocity in blocks per tick, as handed to the packet encoder.
+    pub velocity: LpVec3,
+}
+
+impl ClientVelocityMessage {
+    /// The velocity in blocks per tick that a vanilla client sets on its
+    /// player, bit for bit: [`Self::velocity`] after the wire quantization.
+    pub fn received(&self) -> DVec3 {
+        self.velocity.quantized().0.into()
+    }
+}
+
+fn report_sent_velocities(
+    mut clients: Query<(Entity, &mut Client)>,
+    mut velocity_writer: MessageWriter<ClientVelocityMessage>,
+) {
+    for (client, mut state) in &mut clients {
+        if state.sent_velocities.is_empty() {
+            continue;
+        }
+
+        velocity_writer.write_batch(
+            state
+                .sent_velocities
+                .drain(..)
+                .map(|velocity| ClientVelocityMessage { client, velocity }),
+        );
+    }
 }
 
 pub(crate) fn update_view_and_layers(
