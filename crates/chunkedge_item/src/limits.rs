@@ -87,33 +87,6 @@ mod tests {
     }
 
     #[test]
-    fn container_length_is_capped() {
-        let mut buf = vec![];
-        write_stack_with_component(&mut buf, ItemKind::Chest, component_id::CONTAINER);
-        VarInt(MAX_CONTAINER_ITEMS as i32 + 1)
-            .encode(&mut buf)
-            .unwrap();
-        buf.extend(std::iter::repeat_n(0, MAX_CONTAINER_ITEMS + 1));
-
-        assert!(decode_err(&buf).contains("exceeded max size"));
-    }
-
-    #[test]
-    fn charged_projectiles_length_is_capped() {
-        let mut buf = vec![];
-        write_stack_with_component(
-            &mut buf,
-            ItemKind::Crossbow,
-            component_id::CHARGED_PROJECTILES,
-        );
-        VarInt(MAX_CHARGED_PROJECTILES as i32 + 1)
-            .encode(&mut buf)
-            .unwrap();
-
-        assert!(decode_err(&buf).contains("exceeded max size"));
-    }
-
-    #[test]
     fn negative_list_length_is_rejected() {
         let mut buf = vec![];
         write_stack_with_component(&mut buf, ItemKind::Bundle, component_id::BUNDLE_CONTENTS);

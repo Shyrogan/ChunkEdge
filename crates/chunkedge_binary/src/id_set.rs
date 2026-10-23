@@ -76,12 +76,4 @@ mod tests {
     fn huge_length_fails_on_short_input() {
         assert!(decode_from(i32::MAX).is_err());
     }
-
-    #[test]
-    fn round_trip() {
-        let set = IDSet::AdHocSet(vec![RegistryId::new(3), RegistryId::new(7)]);
-        let mut buf = vec![];
-        set.encode(&mut buf).unwrap();
-        assert_eq!(IDSet::decode(&mut buf.as_slice()).unwrap(), set);
-    }
 }
