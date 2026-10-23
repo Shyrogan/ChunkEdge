@@ -1,7 +1,8 @@
 use chunkedge_server::protocol::movement_flags::MovementFlags;
 
 use crate::abilities::PlayerAbilitiesFlags;
-use crate::client::Client;
+use crate::client::{Client, ClientVelocityMessage};
+use crate::ecs::message::Messages;
 use crate::entity::EntityId;
 use crate::entity::avatar::PlayerModeCustomisation;
 use crate::layer::ChunkLayer;
@@ -9,7 +10,7 @@ use crate::layer::chunk::UnloadedChunk;
 use crate::math::DVec3;
 use crate::protocol::packets::play::{
     AcceptTeleportationC2s, LoginS2c, MoveEntityPosS2c, MovePlayerPosRotC2s, PlayerCombatKillS2c,
-    PlayerPositionS2c, SetEntityDataS2c,
+    PlayerPositionS2c, SetEntityDataS2c, SetEntityMotionS2c,
 };
 use crate::protocol::{Packet, VarInt};
 use crate::testing::{ScenarioSingleClient, create_mock_client};
@@ -211,4 +212,56 @@ fn client_skin_layers_are_sent_to_other_clients() {
         .any(|pkt| pkt.tracked_values.0.windows(3).any(|w| w == [16, 0, 0x7f]));
 
     assert!(sent_all_layers, "model-part mask missing from tracked data");
+}
+
+#[test]
+fn set_velocity_is_reported_as_it_goes_on_the_wire() {
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    app.update();
+    helper.clear_received();
+
+    let mut state = app.world_mut().get_mut::<Client>(client).unwrap();
+    state.set_velocity([8.0, 7.2, -3.4]);
+    state.set_velocity([250.0, -0.3, 0.0]);
+    app.update();
+
+    let reported: Vec<_> = app
+        .world()
+        .resource::<Messages<ClientVelocityMessage>>()
+        .iter_current_update_messages()
+        .copied()
+        .collect();
+    let received: Vec<_> = helper
+        .collect_received()
+        .0
+        .into_iter()
+        .filter(|frame| frame.id == SetEntityMotionS2c::ID)
+        .map(|frame| frame.decode::<SetEntityMotionS2c>().unwrap().velocity)
+        .collect();
+
+    assert_eq!(reported.len(), 2);
+    assert_eq!(received.len(), 2);
+    for (message, wire) in reported.iter().zip(&received) {
+        assert_eq!(message.client, client);
+        assert_eq!(
+            message.quantized().to_array().map(f64::to_bits),
+            wire.0.map(f64::to_bits),
+        );
+    }
+
+    app.update();
+    assert_eq!(
+        app.world()
+            .resource::<Messages<ClientVelocityMessage>>()
+            .iter_current_update_messages()
+            .len(),
+        0,
+        "each velocity is reported once"
+    );
 }
