@@ -5,9 +5,11 @@ use std::net::IpAddr;
 use std::time::Instant;
 
 use bevy_app::prelude::*;
+use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::query::QueryData;
 use bevy_ecs::system::Command;
+use bevy_ecs::world::DeferredWorld;
 use byteorder::{NativeEndian, ReadBytesExt};
 use bytes::{Bytes, BytesMut};
 use chunkedge_binary::Encode;
@@ -17,7 +19,8 @@ use chunkedge_entity::living::Health;
 use chunkedge_entity::player::{Food, PlayerEntity, Saturation};
 use chunkedge_entity::tracked_data::TrackedData;
 use chunkedge_entity::{
-    ClearEntityChangesSet, EntityId, EntityLayerId, EntityStatus, OldPosition, Position, Velocity,
+    ClearEntityChangesSet, EntityId, EntityLayerId, EntityManager, EntityStatus, OldPosition,
+    Position, Velocity,
 };
 use chunkedge_entity::{HumanoidArm, query::EntityInitQuery};
 use chunkedge_math::{DVec3, Vec3};
@@ -251,13 +254,40 @@ pub struct ClientMarker;
 /// The component is removed when the client is disconnected. You are allowed to
 /// remove the component yourself.
 #[derive(Component)]
+#[component(on_add = assign_client_entity_id)]
 pub struct Client {
     conn: Box<dyn ClientConnection>,
     pub(crate) online_mode: bool,
     pub(crate) enc: PacketEncoder,
-    /// Copy of the client's [`EntityId`] component, set at join time, so
-    /// methods on `Client` can address packets to the client's own entity.
+    /// Copy of the client's [`EntityId`] component, set when the client is
+    /// added, so methods on `Client` can address packets to the client's own
+    /// entity.
     pub(crate) entity_id: EntityId,
+}
+
+/// Gives the client its protocol entity ID as soon as it is spawned.
+///
+/// Entity IDs are otherwise assigned in `PostUpdate`, which would leave
+/// [`Client::kill`] and friends addressing entity -1 when called from an
+/// `Added<Client>` system on the join tick.
+fn assign_client_entity_id(mut world: DeferredWorld, ctx: HookContext) {
+    let Some(mut id) = world.get::<EntityId>(ctx.entity).copied() else {
+        return;
+    };
+
+    if id == EntityId::default() {
+        let Some(mut manager) = world.get_resource_mut::<EntityManager>() else {
+            return;
+        };
+        id = manager.next_id();
+        if let Some(mut entity_id) = world.get_mut::<EntityId>(ctx.entity) {
+            *entity_id = id;
+        }
+    }
+
+    if let Some(mut client) = world.get_mut::<Client>(ctx.entity) {
+        client.entity_id = id;
+    }
 }
 
 /// Represents the bidirectional packet channel between the server and a client
