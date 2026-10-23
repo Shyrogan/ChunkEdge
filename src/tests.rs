@@ -8,6 +8,7 @@ mod layer;
 mod passenger;
 mod player_list;
 mod potions;
+mod respawn;
 mod scoreboard;
 mod weather;
 mod world_border;

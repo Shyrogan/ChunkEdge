@@ -1,3 +1,5 @@
+use bevy_app::Update;
+use bevy_ecs::prelude::*;
 use chunkedge_server::protocol::movement_flags::MovementFlags;
 
 use crate::abilities::PlayerAbilitiesFlags;
@@ -9,7 +11,7 @@ use crate::math::DVec3;
 use crate::protocol::VarInt;
 use crate::protocol::packets::play::{
     AcceptTeleportationC2s, LoginS2c, MoveEntityPosS2c, MovePlayerPosRotC2s, PlayerCombatKillS2c,
-    PlayerPositionS2c, SetEntityDataS2c,
+    PlayerPositionS2c, SetEntityDataS2c, SetEntityMotionS2c,
 };
 use crate::testing::{ScenarioSingleClient, create_mock_client};
 use crate::{ChunkPos, GameMode};
@@ -157,6 +159,41 @@ fn client_knows_itself_by_its_entity_id() {
     recvd.assert_count::<PlayerCombatKillS2c>(1);
     assert_eq!(
         recvd.first::<PlayerCombatKillS2c>().player_id,
+        VarInt(entity_id)
+    );
+}
+
+#[test]
+fn client_methods_target_own_entity_on_join_tick() {
+    fn on_join(mut clients: Query<&mut Client, Added<Client>>) {
+        for mut client in &mut clients {
+            client.kill("test");
+            client.set_velocity([0.0, 1.0, 0.0]);
+        }
+    }
+
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    app.add_systems(Update, on_join);
+    app.update();
+
+    let entity_id = app.world().get::<EntityId>(client).unwrap().get();
+    assert_ne!(entity_id, EntityId::default().get());
+
+    let recvd = helper.collect_received();
+    recvd.assert_count::<PlayerCombatKillS2c>(1);
+    assert_eq!(
+        recvd.first::<PlayerCombatKillS2c>().player_id,
+        VarInt(entity_id)
+    );
+    recvd.assert_count::<SetEntityMotionS2c>(1);
+    assert_eq!(
+        recvd.first::<SetEntityMotionS2c>().entity_id,
         VarInt(entity_id)
     );
 }
