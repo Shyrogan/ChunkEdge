@@ -17,9 +17,9 @@ use chunkedge_server::protocol::packets::play::{
 use petgraph::graph::NodeIndex;
 use petgraph::prelude::EdgeRef;
 use petgraph::{Direction, Graph};
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
-use crate::graph::{CommandEdgeType, CommandGraph, CommandNode};
+use crate::graph::{CommandEdgeType, CommandGraph};
 use crate::parsers::ParseInput;
 use crate::scopes::{CommandScopePlugin, CommandScopes};
 use crate::{CommandRegistry, CommandScopeRegistry, CommandSystemSet, ModifierValue};
@@ -234,197 +234,160 @@ fn parse_incoming_commands(
 ) {
     for command_message in message_reader.read() {
         let executor = command_message.executor;
-        // these are the leafs of the graph that are executable under this command
-        // group
-        let executable_leafs = command_registry
-            .executables
+        let default_scopes = CommandScopes::new();
+        let executor_scopes = entity_scopes
+            .get(executor)
+            .unwrap_or(&default_scopes)
+            .0
             .iter()
-            .collect::<Vec<&NodeIndex>>();
-        let root = command_registry.graph.root;
+            .map(String::as_str)
+            .collect();
+        let dispatcher = Dispatcher {
+            registry: &command_registry,
+            scope_registry: &scope_registry,
+            executor_scopes,
+        };
 
-        let command_input = &*command_message.command;
-        let graph = &command_registry.graph.graph;
-        let input = ParseInput::new(command_input);
-
-        let mut to_be_executed = Vec::new();
-
-        let mut args = Vec::new();
-        let mut modifiers_to_be_executed = Vec::new();
-
-        parse_command_args(
-            &mut args,
-            &mut modifiers_to_be_executed,
-            input,
-            graph,
-            &executable_leafs,
-            command_registry.as_ref(),
-            &mut to_be_executed,
-            root,
-            executor,
-            &entity_scopes,
-            scope_registry.as_ref(),
+        let Some(matched) = dispatcher.resolve(
+            command_registry.graph.root,
+            ParseInput::new(&command_message.command),
             false,
-        );
+            Vec::new(),
+            Vec::new(),
+        ) else {
+            debug!("No command matched: /{}", command_message.command);
+            continue;
+        };
 
         let mut modifiers = HashMap::new();
-        for (node, modifier) in modifiers_to_be_executed {
+        for (node, modifier) in matched.modifiers {
             command_registry.modifiers[&node](modifier, &mut modifiers);
         }
 
-        for node in to_be_executed {
-            trace!("executing node: {node:?}");
-            message_writer.write(CommandProcessedMessage {
-                command: args.join(" "),
-                executor,
-                modifiers: modifiers.clone(),
-                node,
-            });
-        }
+        trace!("executing node: {:?}", matched.node);
         info!(
             "Command dispatched: /{} (debug logs for more data)",
             command_message.command
         );
         debug!("Command modifiers: {:?}", modifiers);
+        message_writer.write(CommandProcessedMessage {
+            command: matched.args.join(" "),
+            executor,
+            modifiers,
+            node: matched.node,
+        });
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-/// recursively parse the command args.
-fn parse_command_args(
-    command_args: &mut Vec<String>,
-    modifiers_to_be_executed: &mut Vec<(NodeIndex, String)>,
-    mut input: ParseInput,
-    graph: &Graph<CommandNode, CommandEdgeType>,
-    executable_leafs: &[&NodeIndex],
-    command_registry: &CommandRegistry,
-    to_be_executed: &mut Vec<NodeIndex>,
-    current_node: NodeIndex,
-    executor: Entity,
-    scopes: &Query<&CommandScopes>,
-    scope_registry: &CommandScopeRegistry,
-    coming_from_redirect: bool,
-) -> bool {
-    let node_scopes = &graph[current_node].scopes;
-    let default_scopes = CommandScopes::new();
-    let client_scopes: Vec<&str> = scopes
-        .get(executor)
-        .unwrap_or(&default_scopes)
-        .0
-        .iter()
-        .map(|scope| scope.as_str())
-        .collect();
-    // if empty, we assume the node is global
-    if !node_scopes.is_empty() {
-        let mut has_scope = false;
-        for scope in node_scopes {
-            if scope_registry.any_grants(&client_scopes, scope) {
-                has_scope = true;
-                break;
-            }
-        }
-        if !has_scope {
-            return false;
-        }
-    }
+/// The executable node a command resolved to.
+struct CommandMatch {
+    node: NodeIndex,
+    /// The raw text of each argument on the path, re-parsed by the executable.
+    args: Vec<String>,
+    /// The modifier nodes on the path with the text they matched.
+    modifiers: Vec<(NodeIndex, String)>,
+}
 
-    if !coming_from_redirect {
-        // we want to skip whitespace before matching the node
-        input.skip_whitespace();
-        match &graph[current_node].data {
-            // no real need to check for root node
-            NodeData::Root => {
-                if command_registry.modifiers.contains_key(&current_node) {
-                    modifiers_to_be_executed.push((current_node, String::new()));
-                }
-            }
-            // if the node is a literal, we want to match the name of the literal
-            // to the input
-            NodeData::Literal { name } => {
-                if input.match_next(name) {
-                    if !input.match_next(" ") && !input.is_done() {
-                        return false;
-                    } // we want to pop the whitespace after the literal
-                    if command_registry.modifiers.contains_key(&current_node) {
-                        modifiers_to_be_executed.push((current_node, String::new()));
+struct Dispatcher<'a> {
+    registry: &'a CommandRegistry,
+    scope_registry: &'a CommandScopeRegistry,
+    executor_scopes: Vec<&'a str>,
+}
+
+impl Dispatcher<'_> {
+    /// Matches `node` against the start of `input` and resolves the rest of
+    /// the input through its children, returning the first path that ends on
+    /// an executable node with all input consumed.
+    ///
+    /// Only one path is ever selected, and the returned arguments are the ones
+    /// read along that path. Like brigadier, literal children are tried before
+    /// argument children, so `/test a 1` prefers a literal `a` over an argument
+    /// that reads `a`. A branch that fails to parse falls back to the next
+    /// child.
+    fn resolve(
+        &self,
+        node: NodeIndex,
+        mut input: ParseInput,
+        via_redirect: bool,
+        mut args: Vec<String>,
+        mut modifiers: Vec<(NodeIndex, String)>,
+    ) -> Option<CommandMatch> {
+        if !self.can_access(node) {
+            return None;
+        }
+
+        let graph = &self.registry.graph.graph;
+
+        if via_redirect {
+            // Arguments read before a redirect belong to the redirecting node,
+            // not to the command we land in.
+            args.clear();
+        } else {
+            input.skip_whitespace();
+            let matched = match &graph[node].data {
+                NodeData::Root => String::new(),
+                NodeData::Literal { name } => {
+                    // The literal must be a whole word.
+                    if !input.match_next(name) || !(input.match_next(" ") || input.is_done()) {
+                        return None;
                     }
-                } else {
-                    return false;
+                    String::new()
                 }
-            }
-            // if the node is an argument, we want to parse the argument
-            NodeData::Argument { .. } => {
-                let Some(parser) = command_registry.parsers.get(&current_node) else {
-                    return false;
-                };
-
-                // we want to save the input before and after parsing
-                // this is so we can save the argument to the command args
-                let pre_input = input.clone().into_inner();
-                let valid = parser(&mut input);
-                if valid {
-                    // If input.len() > pre_input.len() the parser replaced the input
-                    let Some(arg) = pre_input
-                        .get(..pre_input.len().wrapping_sub(input.len()))
-                        .map(|s| s.to_owned())
-                    else {
-                        panic!(
+                NodeData::Argument { .. } => {
+                    let parser = self.registry.parsers.get(&node)?;
+                    let before = input.clone().into_inner();
+                    if !parser(&mut input) {
+                        return None;
+                    }
+                    let Some(arg) = before.get(..before.len().wrapping_sub(input.len())) else {
+                        error!(
                             "Parser replaced input with another string. This is not allowed. \
                              Attempting to parse: {}",
                             input.into_inner()
                         );
+                        return None;
                     };
-
-                    if command_registry.modifiers.contains_key(&current_node) {
-                        modifiers_to_be_executed.push((current_node, arg.clone()));
-                    }
-                    command_args.push(arg);
-                } else {
-                    return false;
+                    args.push(arg.to_owned());
+                    arg.to_owned()
                 }
+            };
+            if self.registry.modifiers.contains_key(&node) {
+                modifiers.push((node, matched));
             }
         }
-    } else {
-        command_args.clear();
-    }
 
-    input.skip_whitespace();
-    if input.is_done() && executable_leafs.contains(&&current_node) {
-        to_be_executed.push(current_node);
-        return true;
-    }
-
-    let mut all_invalid = true;
-    for neighbor in graph.neighbors(current_node) {
-        let pre_input = input.clone();
-        let mut args = command_args.clone();
-        let mut modifiers = modifiers_to_be_executed.clone();
-        let valid = parse_command_args(
-            &mut args,
-            &mut modifiers,
-            input.clone(),
-            graph,
-            executable_leafs,
-            command_registry,
-            to_be_executed,
-            neighbor,
-            executor,
-            scopes,
-            scope_registry,
-            {
-                let edge = graph.find_edge(current_node, neighbor).unwrap();
-                matches!(&graph[edge], CommandEdgeType::Redirect)
-            },
-        );
-        if valid {
-            *command_args = args;
-            *modifiers_to_be_executed = modifiers;
-            all_invalid = false;
-        } else {
-            input = pre_input;
+        input.skip_whitespace();
+        if input.is_done() && self.registry.executables.contains(&node) {
+            return Some(CommandMatch {
+                node,
+                args,
+                modifiers,
+            });
         }
+
+        let mut edges: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
+        // petgraph lists the newest edge first: restore registration order, then
+        // move literals ahead of arguments (the sort is stable).
+        edges.reverse();
+        edges.sort_by_key(|edge| !matches!(graph[edge.target()].data, NodeData::Literal { .. }));
+
+        edges.into_iter().find_map(|edge| {
+            self.resolve(
+                edge.target(),
+                input.clone(),
+                matches!(edge.weight(), CommandEdgeType::Redirect),
+                args.clone(),
+                modifiers.clone(),
+            )
+        })
     }
-    if all_invalid {
-        return false;
+
+    /// Nodes without scopes are open to everyone.
+    fn can_access(&self, node: NodeIndex) -> bool {
+        let node_scopes = &self.registry.graph.graph[node].scopes;
+        node_scopes.is_empty()
+            || node_scopes
+                .iter()
+                .any(|scope| self.scope_registry.any_grants(&self.executor_scopes, scope))
     }
-    true
 }
