@@ -140,12 +140,25 @@ impl<'a> ParseInput<'a> {
 
     /// Matches the case-insensitive string and advances the input if it matches
     pub fn match_next(&mut self, string: &str) -> bool {
-        if self
-            .0
-            .to_lowercase()
-            .starts_with(string.to_lowercase().as_str())
-        {
-            self.advance_n_bytes(string.len());
+        // Lowercasing can change a character's byte length (e.g. U+212A KELVIN
+        // SIGN becomes an ASCII `k`), so walk the input char by char to know
+        // how many of its bytes the match covers.
+        // `lowered` always stays a prefix of `target`, so equal lengths mean a
+        // full match.
+        let target = string.to_lowercase();
+        let mut lowered = String::with_capacity(target.len());
+        for (idx, c) in self.0.char_indices() {
+            if lowered.len() == target.len() {
+                self.advance_n_bytes(idx);
+                return true;
+            }
+            lowered.extend(c.to_lowercase());
+            if !target.starts_with(lowered.as_str()) {
+                return false;
+            }
+        }
+        if lowered.len() == target.len() {
+            self.advance_n_bytes(self.0.len());
             true
         } else {
             false
@@ -255,6 +268,29 @@ mod test {
 
         assert!(input.match_next("brown fox"));
         assert_eq!(input.pop_all(), Some(" jumps over the lazy dog"));
+    }
+
+    #[test]
+    fn test_match_next_with_length_changing_lowercase() {
+        // U+212A KELVIN SIGN is 3 bytes and lowercases to the 1-byte `k`.
+        let mut input = ParseInput::new("kic\u{212A} steve");
+        assert!(input.match_next("kick"));
+        assert_eq!(input.into_inner(), " steve");
+
+        let mut input = ParseInput::new("\u{212A}");
+        assert!(!input.match_next("ki"));
+        assert_eq!(input.into_inner(), "\u{212A}");
+
+        // U+0130 lowercases to `i` followed by a combining dot.
+        let mut input = ParseInput::new("\u{130}");
+        assert!(!input.match_next("i"));
+        assert_eq!(input.into_inner(), "\u{130}");
+
+        let mut input = ParseInput::new("ab");
+        assert!(!input.match_next("abc"));
+        assert!(input.match_next(""));
+        assert!(input.match_next("AB"));
+        assert!(input.is_done());
     }
     #[test]
     fn test_absolute_or_relative() {

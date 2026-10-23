@@ -4,11 +4,15 @@ use std::marker::PhantomData;
 use bevy_app::{App, Plugin, PostStartup};
 use bevy_ecs::change_detection::ResMut;
 use bevy_ecs::message::{Message, MessageReader, MessageWriter};
-use bevy_ecs::prelude::{Entity, IntoScheduleConfigs, Resource};
+use bevy_ecs::prelude::{Entity, IntoScheduleConfigs, Query, Resource};
 use chunkedge_server::EventLoopPreUpdate;
+use chunkedge_server::client::Client;
+use chunkedge_server::message::SendMessage;
+use chunkedge_text::{Color, IntoText};
 use petgraph::prelude::NodeIndex;
+use tracing::debug;
 
-use crate::graph::CommandGraphBuilder;
+use crate::graph::{CommandGraphBuilder, Executable};
 use crate::modifier_value::ModifierValue;
 use crate::parsers::ParseInput;
 use crate::{
@@ -57,7 +61,7 @@ where
 #[derive(Resource)]
 struct CommandResource<T: Command + Send + Sync> {
     command: PhantomData<T>,
-    executables: HashMap<NodeIndex, fn(&mut ParseInput) -> T>,
+    executables: HashMap<NodeIndex, Executable<T>>,
 }
 
 impl<T: Command + Send + Sync> CommandResource<T> {
@@ -110,17 +114,28 @@ fn command_message_system<T>(
     mut commands_executed: MessageReader<CommandProcessedMessage>,
     mut messages: MessageWriter<CommandResultMessage<T>>,
     command: ResMut<CommandResource<T>>,
+    mut clients: Query<&mut Client>,
 ) where
     T: Command + Send + Sync,
 {
     for command_message in commands_executed.read() {
-        if let Some(executable) = command.executables.get(&command_message.node) {
-            let result = executable(&mut ParseInput::new(&command_message.command));
-            messages.write(CommandResultMessage {
-                result,
-                executor: command_message.executor,
-                modifiers: command_message.modifiers.clone(),
-            });
+        let Some(executable) = command.executables.get(&command_message.node) else {
+            continue;
+        };
+        match executable(&mut ParseInput::new(&command_message.command)) {
+            Ok(result) => {
+                messages.write(CommandResultMessage {
+                    result,
+                    executor: command_message.executor,
+                    modifiers: command_message.modifiers.clone(),
+                });
+            }
+            Err(err) => {
+                debug!("Rejected command args `{}`: {err}", command_message.command);
+                if let Ok(mut client) = clients.get_mut(command_message.executor) {
+                    client.send_chat_message(err.to_string().color(Color::RED));
+                }
+            }
         }
     }
 }

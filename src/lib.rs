@@ -42,6 +42,11 @@ pub mod testing;
 #[cfg(test)]
 mod tests;
 
+// Lets the `Command` derive macro, which refers to `chunkedge::command`, be
+// used by the tests inside this crate.
+#[cfg(all(test, feature = "command"))]
+extern crate self as chunkedge;
+
 #[cfg(feature = "log")]
 pub use bevy_log as log;
 #[cfg(feature = "advancement")]
