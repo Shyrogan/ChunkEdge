@@ -5,13 +5,18 @@ use chunkedge_protocol::WritePacket;
 use chunkedge_protocol::packets::play::EntityEventS2c;
 use derive_more::Deref;
 
-use crate::client::{Client, UpdateClientsSet};
+use crate::client::{Client, UpdateClientsSet, VisibleChunkLayer};
 
 pub struct OpLevelPlugin;
 
 impl Plugin for OpLevelPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PostUpdate, update_op_level.in_set(UpdateClientsSet));
+        app.add_systems(
+            PostUpdate,
+            update_op_level
+                .in_set(UpdateClientsSet)
+                .after(crate::spawn::respawn),
+        );
     }
 }
 
@@ -29,7 +34,16 @@ impl OpLevel {
     }
 }
 
-fn update_op_level(mut clients: Query<(&mut Client, &EntityId, &OpLevel), Changed<OpLevel>>) {
+fn update_op_level(
+    mut clients: Query<
+        (&mut Client, &EntityId, &OpLevel),
+        Or<(
+            Changed<OpLevel>,
+            // Respawn resets the client-side permission level.
+            Changed<VisibleChunkLayer>,
+        )>,
+    >,
+) {
     for (mut client, id, lvl) in &mut clients.iter_mut() {
         client.write_packet(&EntityEventS2c {
             entity_id: id.get(),
