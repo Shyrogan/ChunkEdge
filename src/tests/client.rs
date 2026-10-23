@@ -1,3 +1,5 @@
+use bevy_app::Update;
+use bevy_ecs::prelude::*;
 use chunkedge_server::protocol::movement_flags::MovementFlags;
 
 use crate::abilities::PlayerAbilitiesFlags;
@@ -363,4 +365,39 @@ fn unexpected_teleport_confirmation_disconnects_without_panicking() {
     app.update();
 
     assert!(app.world().get::<Client>(client).is_none());
+}
+
+#[test]
+fn client_methods_target_own_entity_on_join_tick() {
+    fn on_join(mut clients: Query<&mut Client, Added<Client>>) {
+        for mut client in &mut clients {
+            client.kill("test");
+            client.set_velocity([0.0, 1.0, 0.0]);
+        }
+    }
+
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    app.add_systems(Update, on_join);
+    app.update();
+
+    let entity_id = app.world().get::<EntityId>(client).unwrap().get();
+    assert_ne!(entity_id, EntityId::default().get());
+
+    let recvd = helper.collect_received();
+    recvd.assert_count::<PlayerCombatKillS2c>(1);
+    assert_eq!(
+        recvd.first::<PlayerCombatKillS2c>().player_id,
+        VarInt(entity_id)
+    );
+    recvd.assert_count::<SetEntityMotionS2c>(1);
+    assert_eq!(
+        recvd.first::<SetEntityMotionS2c>().entity_id,
+        VarInt(entity_id)
+    );
 }
