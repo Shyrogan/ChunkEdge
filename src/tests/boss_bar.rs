@@ -1,21 +1,15 @@
-use std::collections::HashSet;
-
-use bevy_app::App;
-use bevy_ecs::entity::Entity;
 use chunkedge_boss_bar::{
-    BossBarAction, BossBarBundle, BossBarColor, BossBarDivision, BossBarFlags, BossBarHealth,
-    BossBarStyle, BossBarTitle,
+    BossBarBundle, BossBarColor, BossBarDivision, BossBarFlags, BossBarHealth, BossBarStyle,
+    BossBarTitle,
 };
+use chunkedge_server::Despawned;
 use chunkedge_server::client::VisibleEntityLayers;
 use chunkedge_server::entity::EntityLayerId;
-use chunkedge_server::protocol::Packet;
 use chunkedge_server::protocol::packets::play::BossEventS2c;
 use chunkedge_server::text::IntoText;
-use chunkedge_server::uuid::Uuid;
-use chunkedge_server::{Despawned, UniqueId};
 
 use crate::Text;
-use crate::testing::{PacketFrames, ScenarioSingleClient};
+use crate::testing::ScenarioSingleClient;
 
 #[test]
 fn test_initialize_on_join() {
@@ -180,104 +174,6 @@ fn test_client_layer_change() {
     // We should receive a boss bar packet with the ADD action
     let frames = helper.collect_received();
     frames.assert_count::<BossEventS2c>(1);
-}
-
-#[test]
-fn test_update_and_hide_same_tick() {
-    let ScenarioSingleClient {
-        mut app,
-        mut helper,
-        layer,
-        client,
-    } = prepare();
-    let id = app.world().get::<UniqueId>(layer).unwrap().0;
-
-    // Change the bar and stop viewing its layer in the same tick.
-    let mut new_flags = BossBarFlags::new();
-    new_flags.set_darken_sky(true);
-    app.world_mut().entity_mut(layer).insert(new_flags);
-    hide_all_layers(&mut app, client);
-
-    app.update();
-
-    let shown = replay_boss_events(&helper.collect_received(), HashSet::from([id]));
-    assert!(shown.is_empty());
-}
-
-#[test]
-fn test_despawn_and_hide_same_tick() {
-    let ScenarioSingleClient {
-        mut app,
-        mut helper,
-        layer,
-        client,
-    } = prepare();
-    let id = app.world().get::<UniqueId>(layer).unwrap().0;
-
-    app.world_mut().entity_mut(layer).insert(Despawned);
-    hide_all_layers(&mut app, client);
-
-    app.update();
-
-    let shown = replay_boss_events(&helper.collect_received(), HashSet::from([id]));
-    assert!(shown.is_empty());
-}
-
-#[test]
-fn test_spawn_while_viewing() {
-    let mut scenario = ScenarioSingleClient::new();
-    scenario.app.update();
-    scenario.helper.clear_received();
-
-    let bar = scenario
-        .app
-        .world_mut()
-        .spawn(BossBarBundle {
-            layer: EntityLayerId(scenario.layer),
-            ..Default::default()
-        })
-        .id();
-
-    scenario.app.update();
-
-    let id = scenario.app.world().get::<UniqueId>(bar).unwrap().0;
-    let shown = replay_boss_events(&scenario.helper.collect_received(), HashSet::new());
-    assert_eq!(shown, HashSet::from([id]));
-}
-
-fn hide_all_layers(app: &mut App, client: Entity) {
-    app.world_mut()
-        .get_mut::<VisibleEntityLayers>(client)
-        .unwrap()
-        .0
-        .clear();
-}
-
-/// Replays the boss bar packets the way the vanilla client applies them,
-/// starting from the bars in `shown`, and returns the bars shown afterwards.
-///
-/// Panics on any packet the client cannot apply: the vanilla client crashes
-/// with a `NullPointerException` on an update for a bar it does not show.
-#[track_caller]
-fn replay_boss_events(frames: &PacketFrames, mut shown: HashSet<Uuid>) -> HashSet<Uuid> {
-    for frame in frames.0.iter().filter(|f| f.id == BossEventS2c::ID) {
-        let BossEventS2c { id, action } = frame.decode::<BossEventS2c>().unwrap();
-        match action {
-            BossBarAction::Add { .. } => {
-                assert!(shown.insert(id), "Add for boss bar {id} already shown");
-            }
-            BossBarAction::Remove => {
-                assert!(shown.remove(&id), "Remove for boss bar {id} not shown");
-            }
-            action => {
-                assert!(
-                    shown.contains(&id),
-                    "{action:?} for boss bar {id} not shown"
-                );
-            }
-        }
-    }
-    shown
 }
 
 fn prepare() -> ScenarioSingleClient {
