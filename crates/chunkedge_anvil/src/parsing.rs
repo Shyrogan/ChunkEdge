@@ -105,8 +105,6 @@ pub enum ParseChunkError {
     BadBiomeLongCount,
     #[error("invalid biome palette index")]
     BadBiomePaletteIndex,
-    #[error("missing block entities")]
-    MissingBlockEntities,
     #[error("missing block entity ident")]
     MissingBlockEntityIdent,
     #[error("invalid block entity ident of \"{0}\"")]
@@ -133,13 +131,7 @@ fn parse_chunk(
     let min_sect_y = i32::from(
         sections
             .iter()
-            .filter_map(|sect| {
-                if let Some(Value::Byte(sect_y)) = sect.get("Y") {
-                    Some(*sect_y)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|sect| sect.get("Y").and_then(Value::as_i8))
             .min()
             .unwrap(),
     );
@@ -148,7 +140,9 @@ fn parse_chunk(
     let mut converted_biome_palette = vec![];
 
     for mut section in sections {
-        let Some(Value::Byte(sect_y)) = section.remove("Y") else {
+        // Vanilla reads `Y` as any numeric tag narrowed to a byte. The world
+        // upgrader writes the sections it adds below y=0 with an int `Y`.
+        let Some(sect_y) = section.remove("Y").as_ref().and_then(Value::as_i8) else {
             return Err(ParseChunkError::MissingSectionY);
         };
 
@@ -316,11 +310,9 @@ fn parse_chunk(
         }
     }
 
-    let Some(Value::List(block_entities)) = nbt.remove("block_entities") else {
-        return Err(ParseChunkError::MissingBlockEntities);
-    };
-
-    if let List::Compound(block_entities) = block_entities {
+    // Vanilla reads a missing list as empty. The world upgrader leaves it out
+    // of chunks without block entities.
+    if let Some(Value::List(List::Compound(block_entities))) = nbt.remove("block_entities") {
         for mut comp in block_entities {
             let Some(Value::String(ident)) = comp.remove("id") else {
                 return Err(ParseChunkError::MissingBlockEntityIdent);
