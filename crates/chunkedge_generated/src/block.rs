@@ -10,6 +10,7 @@ use crate::item::ItemKind;
 
 include!(concat!(env!("OUT_DIR"), "/block.rs"));
 include!(concat!(env!("OUT_DIR"), "/block_physics.rs"));
+include!(concat!(env!("OUT_DIR"), "/block_tag.rs"));
 
 impl BlockState {
     /// The offset vanilla adds to this block's shapes at the block position
@@ -415,5 +416,50 @@ mod tests {
             }
         }
         assert!(checked > 0);
+    }
+
+    #[test]
+    fn block_tag_membership() {
+        for kind in [BlockKind::Ladder, BlockKind::Vine, BlockKind::Scaffolding] {
+            assert!(kind.is_in(BlockTag::Climbable), "{kind:?}");
+        }
+        assert!(BlockKind::OakFence.is_in(BlockTag::Fences));
+        assert!(BlockKind::NetherBrickFence.is_in(BlockTag::Fences));
+        assert!(BlockKind::CobblestoneWall.is_in(BlockTag::Walls));
+        assert!(BlockState::OAK_FENCE_GATE.is_in(BlockTag::FenceGates));
+
+        for tag in [
+            BlockTag::Climbable,
+            BlockTag::Fences,
+            BlockTag::Walls,
+            BlockTag::FenceGates,
+        ] {
+            assert!(!BlockKind::Stone.is_in(tag), "{tag:?}");
+        }
+    }
+
+    #[test]
+    fn block_tag_bitset_matches_members() {
+        for tag in BlockTag::ALL {
+            for kind in BlockKind::ALL {
+                assert_eq!(
+                    tag.contains(kind),
+                    tag.blocks().contains(&kind),
+                    "{tag:?} {kind:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn block_tag_str_round_trip() {
+        for tag in BlockTag::ALL {
+            assert_eq!(BlockTag::from_str(tag.to_str()), Some(tag));
+        }
+        assert_eq!(
+            BlockTag::from_str("mineable/pickaxe"),
+            Some(BlockTag::MineablePickaxe)
+        );
+        assert_eq!(BlockTag::from_str("fences/wooden"), None);
     }
 }

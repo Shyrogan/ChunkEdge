@@ -3,6 +3,7 @@ use chunkedge_build_utils::write_generated_file;
 mod attributes;
 mod block;
 mod block_physics;
+mod block_tag;
 mod chunk_view;
 mod command_argument_type;
 mod item;
@@ -16,6 +17,7 @@ pub fn main() -> anyhow::Result<()> {
     write_generated_file(attributes::build()?, "attributes.rs")?;
     write_generated_file(block::build()?, "block.rs")?;
     write_generated_file(block_physics::build()?, "block_physics.rs")?;
+    write_generated_file(block_tag::build()?, "block_tag.rs")?;
     write_generated_file(item::build()?, "item.rs")?;
     write_generated_file(item_component_type::build()?, "item_component_type.rs")?;
     write_generated_file(sound::build()?, "sound.rs")?;
