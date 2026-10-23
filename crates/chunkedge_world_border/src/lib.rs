@@ -3,7 +3,7 @@
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use chunkedge_server::ChunkLayer;
-use chunkedge_server::client::{Client, UpdateClientsSet, VisibleChunkLayer};
+use chunkedge_server::client::{Client, FlushPacketsSet, UpdateClientsSet, VisibleChunkLayer};
 use chunkedge_server::protocol::WritePacket;
 use chunkedge_server::protocol::packets::play::{
     InitializeBorderS2c, SetBorderCenterS2c, SetBorderLerpSizeS2c, SetBorderSizeS2c,
@@ -28,7 +28,6 @@ impl Plugin for WorldBorderPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    init_world_border_for_new_clients,
                     tick_world_border_lerp,
                     change_world_border_center,
                     change_world_border_warning_blocks,
@@ -36,6 +35,15 @@ impl Plugin for WorldBorderPlugin {
                     change_world_border_portal_tp_boundary,
                 )
                     .in_set(UpdateWorldBorderSet),
+            )
+            .add_systems(
+                PostUpdate,
+                // A layer change can respawn the client into a new client-side
+                // level with a default border, so this must come after the
+                // respawn packet.
+                init_world_border_for_new_clients
+                    .after(UpdateClientsSet)
+                    .before(FlushPacketsSet),
             );
     }
 }
