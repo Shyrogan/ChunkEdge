@@ -146,7 +146,7 @@ pub(super) fn initial_join(
             game_mode: *spawn.game_mode,
             previous_game_mode: spawn.prev_game_mode.0.into(),
             dimension_names: Cow::Owned(dimension_names),
-            dimension_name: Ident::new("overworld").unwrap(),
+            dimension_name: level_name(&codec, chunk_layer),
             hashed_seed: spawn.hashed_seed.0 as i64,
             max_players: VarInt(0), // Ignored by clients.
             view_distance: VarInt(i32::from(spawn.view_distance.get())),
@@ -181,7 +181,25 @@ pub(super) fn initial_join(
     }
 }
 
+/// The level name sent to the client for `chunk_layer`.
+///
+/// ChunkEdge has no notion of a level apart from its dimension type, so each
+/// dimension type doubles as a level of the same name; the login packet lists
+/// every dimension type name as a level. The vanilla client only rebuilds its
+/// level, and with it the height and `min_y` it decodes chunks with, when the
+/// level name changes, so the name must follow the layer's dimension type.
+fn level_name<'a>(codec: &'a RegistryCodec, chunk_layer: &ChunkLayer) -> Ident<Cow<'a, str>> {
+    codec
+        .registry(DimensionTypeRegistry::KEY)
+        .get(usize::from(chunk_layer.dimension_type().get_value()))
+        .map_or_else(
+            || ident!("overworld").into(),
+            |value| value.name.as_str_ident().into(),
+        )
+}
+
 pub(super) fn respawn(
+    codec: Res<RegistryCodec>,
     mut clients: Query<
         (
             &mut Client,
@@ -218,7 +236,7 @@ pub(super) fn respawn(
 
         client.write_packet(&RespawnS2c {
             dimension_type: VarInt(dimension_type.get_value().into()),
-            dimension_name: Ident::new("overworld").unwrap(),
+            dimension_name: level_name(&codec, chunk_layer),
             hashed_seed: hashed_seed.0,
             game_mode: *game_mode,
             previous_game_mode: prev_game_mode.0.into(),
