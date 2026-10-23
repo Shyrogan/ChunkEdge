@@ -105,7 +105,9 @@ impl Encode for TextComponent {
 
 impl Decode<'_> for TextComponent {
     fn decode(r: &mut &'_ [u8]) -> anyhow::Result<Self> {
-        let value = chunkedge_nbt::from_unnamed_value(r).context("decoding text NBT")?;
+        let value =
+            chunkedge_nbt::from_unnamed_value_with_quota(r, chunkedge_nbt::NETWORK_NBT_QUOTA)
+                .context("decoding text NBT")?;
         Ok(Self {
             text: text_from_nbt(value)?,
         })

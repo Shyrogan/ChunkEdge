@@ -163,7 +163,7 @@ impl<'a, T: Decode<'a>, const MAX_LEN: usize> Decode<'a> for Bounded<Vec<T>, MAX
             "length of Vec exceeds max of {MAX_LEN} (got {len})"
         );
 
-        let mut vec = Vec::with_capacity(len);
+        let mut vec = Vec::with_capacity(cautious_capacity::<T>(len));
 
         for _ in 0..len {
             vec.push(T::decode(r)?);
