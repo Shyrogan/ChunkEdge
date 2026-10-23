@@ -73,6 +73,7 @@ public class Main implements ModInitializer {
             new CommandArgumentTypes(),
             new ItemComponentTypes(),
             new Blocks(),
+            new BlockPhysics(),
             new Effects(),
             new Packets(),
             new Sounds(),
