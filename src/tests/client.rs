@@ -2,14 +2,14 @@ use chunkedge_server::protocol::movement_flags::MovementFlags;
 
 use crate::abilities::PlayerAbilitiesFlags;
 use crate::client::Client;
-use crate::entity::EntityId;
 use crate::entity::avatar::PlayerModelParts;
+use crate::entity::{EntityId, Position, Velocity};
 use crate::layer::ChunkLayer;
 use crate::layer::chunk::UnloadedChunk;
 use crate::math::DVec3;
 use crate::protocol::packets::play::{
-    AcceptTeleportationC2s, LoginS2c, MoveEntityPosS2c, MovePlayerPosRotC2s, PlayerCombatKillS2c,
-    PlayerPositionS2c, SetEntityDataS2c,
+    AcceptTeleportationC2s, EntityPositionSyncS2c, LoginS2c, MoveEntityPosS2c, MovePlayerPosRotC2s,
+    PlayerCombatKillS2c, PlayerPositionS2c, SetEntityDataS2c,
 };
 use crate::protocol::{Packet, VarInt};
 use crate::testing::{ScenarioSingleClient, create_mock_client};
@@ -208,4 +208,77 @@ fn client_skin_layers_are_sent_to_other_clients() {
         .any(|pkt| pkt.tracked_values.0.windows(3).any(|w| w == [16, 0, 0x7f]));
 
     assert!(sent_all_layers, "model-part mask missing from tracked data");
+}
+
+#[test]
+fn client_teleport_sends_velocity_in_blocks_per_tick() {
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    app.update();
+    helper.confirm_initial_pending_teleports();
+    app.update();
+    helper.clear_received();
+
+    app.world_mut().get_mut::<Velocity>(client).unwrap().0 = DVec3::new(20.0, 40.0, -60.0);
+    app.update();
+
+    let recvd = helper.collect_received();
+    recvd.assert_count::<PlayerPositionS2c>(1);
+    let pkt = recvd.first::<PlayerPositionS2c>();
+    assert_eq!(pkt.velocity, DVec3::new(1.0, 2.0, -3.0));
+    assert!(!pkt.flags.x_vel() && !pkt.flags.y_vel() && !pkt.flags.z_vel());
+}
+
+#[test]
+fn entity_position_sync_sends_velocity_in_blocks_per_tick() {
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        layer: layer_ent,
+    } = ScenarioSingleClient::new();
+
+    let mut layer = app.world_mut().get_mut::<ChunkLayer>(layer_ent).unwrap();
+
+    for z in -10..10 {
+        for x in -10..10 {
+            layer.insert_chunk(ChunkPos::new(x, z), UnloadedChunk::new());
+        }
+    }
+
+    let (mut bundle, mut other_helper) = create_mock_client(
+        "other",
+        &mut app
+            .world_mut()
+            .resource_mut::<chunkedge_server::entity::EntityManager>(),
+    );
+
+    bundle.layer.0 = layer_ent;
+    bundle.visible_chunk_layer.0 = layer_ent;
+    bundle.visible_entity_layers.0.insert(layer_ent);
+
+    app.world_mut().spawn(bundle);
+
+    app.update();
+    helper.confirm_initial_pending_teleports();
+    app.update();
+    other_helper.clear_received();
+
+    // Moving 8 blocks or more makes viewers resync the entity's absolute
+    // position, and that packet carries its velocity.
+    app.world_mut().get_mut::<Position>(client).unwrap().0 = DVec3::new(10.0, 0.0, 0.0);
+    app.world_mut().get_mut::<Velocity>(client).unwrap().0 = DVec3::new(20.0, 40.0, -60.0);
+    app.update();
+
+    let recvd = other_helper.collect_received();
+    recvd.assert_count::<EntityPositionSyncS2c>(1);
+    assert_eq!(
+        recvd.first::<EntityPositionSyncS2c>().velocity,
+        DVec3::new(1.0, 2.0, -3.0)
+    );
 }
