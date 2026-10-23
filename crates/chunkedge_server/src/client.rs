@@ -87,11 +87,11 @@ impl Plugin for ClientPlugin {
                     crate::spawn::respawn.before(update_view_and_layers),
                     update_old_view_dist.after(update_view_and_layers),
                     update_game_mode,
-                    update_food_saturation_health,
+                    update_food_saturation_health.after(crate::spawn::respawn),
                     update_tracked_data,
-                    init_tracked_data,
+                    init_tracked_data.after(crate::spawn::respawn),
                     update_tracked_attributes,
-                    init_tracked_attributes,
+                    init_tracked_attributes.after(crate::spawn::respawn),
                 )
                     .in_set(UpdateClientsSet),
                 flush_packets.in_set(FlushPacketsSet),
@@ -1293,7 +1293,13 @@ pub(crate) fn update_game_mode(mut clients: Query<(&mut Client, &GameMode), Chan
 fn update_food_saturation_health(
     mut clients: Query<
         (&mut Client, &Food, &Saturation, &Health),
-        Or<(Changed<Food>, Changed<Saturation>, Changed<Health>)>,
+        Or<(
+            Changed<Food>,
+            Changed<Saturation>,
+            Changed<Health>,
+            // Respawn resets the client-side food and health.
+            Changed<VisibleChunkLayer>,
+        )>,
     >,
 ) {
     for (mut client, food, saturation, health) in &mut clients {
@@ -1325,8 +1331,13 @@ fn flush_packets(
     }
 }
 
+/// Sends the client its own entity data, on join and again after a respawn,
+/// which replaces the client-side player with one holding default values.
 fn init_tracked_data(
-    mut clients: Query<(&mut Client, &EntityId, &TrackedData), Added<TrackedData>>,
+    mut clients: Query<
+        (&mut Client, &EntityId, &TrackedData),
+        Or<(Added<TrackedData>, Changed<VisibleChunkLayer>)>,
+    >,
 ) {
     for (mut client, id, tracked_data) in &mut clients {
         if let Some(init_data) = tracked_data.init_data() {
@@ -1349,8 +1360,13 @@ fn update_tracked_data(mut clients: Query<(&mut Client, &EntityId, &TrackedData)
     }
 }
 
+/// Sends the client its own attributes, on join and again after a respawn,
+/// which drops the client-side attribute modifiers.
 fn init_tracked_attributes(
-    mut clients: Query<(&mut Client, &EntityId, &EntityAttributes), Added<EntityAttributes>>,
+    mut clients: Query<
+        (&mut Client, &EntityId, &EntityAttributes),
+        Or<(Added<EntityAttributes>, Changed<VisibleChunkLayer>)>,
+    >,
 ) {
     for (mut client, id, attributes) in &mut clients {
         client.write_packet(&UpdateAttributesS2c {

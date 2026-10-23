@@ -1,13 +1,20 @@
 use bevy_ecs::prelude::*;
 use chunkedge_ident::{Ident, ident};
 use chunkedge_registry::{BiomeRegistry, DimensionTypeRegistry};
+use chunkedge_server::entity::active_status_effects::{ActiveStatusEffect, ActiveStatusEffects};
+use chunkedge_server::entity::attributes::{EntityAttribute, EntityAttributes};
+use chunkedge_server::protocol::status_effects::StatusEffect;
 
 use crate::Server;
 use crate::client::{VisibleChunkLayer, VisibleEntityLayers};
-use crate::entity::EntityLayerId;
+use crate::entity::{EntityId, EntityLayerId};
 use crate::layer::{ChunkLayer, EntityLayer};
+use crate::op_level::OpLevel;
 use crate::protocol::packets::play::game_event_s2c::GameEventKind;
-use crate::protocol::packets::play::{GameEventS2c, InitializeBorderS2c, LoginS2c, RespawnS2c};
+use crate::protocol::packets::play::{
+    EntityEventS2c, GameEventS2c, InitializeBorderS2c, LoginS2c, RespawnS2c, SetEntityDataS2c,
+    SetHealthS2c, UpdateAttributesS2c, UpdateMobEffectS2c,
+};
 use crate::protocol::{Packet, VarInt};
 use crate::testing::{MockClientHelper, PacketFrames, ScenarioSingleClient};
 use crate::weather::Rain;
@@ -43,6 +50,72 @@ fn switch_layer(
 
     app.update();
     helper.collect_received()
+}
+
+#[test]
+fn respawn_resends_client_state() {
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    let dest = spawn_layer(&mut app, ident!("overworld"));
+    app.update();
+
+    let mut client_mut = app.world_mut().entity_mut(client);
+    client_mut.get_mut::<OpLevel>().unwrap().set(2);
+    client_mut
+        .get_mut::<ActiveStatusEffects>()
+        .unwrap()
+        .apply(ActiveStatusEffect::from_effect(StatusEffect::Speed).with_duration(1000));
+    client_mut
+        .get_mut::<EntityAttributes>()
+        .unwrap()
+        .set_add_modifier(EntityAttribute::MovementSpeed, "test", 0.1);
+    app.update();
+
+    let entity_id = app.world().get::<EntityId>(client).unwrap().get();
+    let recvd = switch_layer(&mut app, &mut helper, client, dest);
+
+    recvd.assert_count::<RespawnS2c>(1);
+
+    recvd.assert_count::<EntityEventS2c>(1);
+    recvd.assert_order::<(RespawnS2c, EntityEventS2c)>();
+    let op_event = recvd.first::<EntityEventS2c>();
+    assert_eq!(op_event.entity_id, entity_id);
+    assert_eq!(op_event.entity_status, 24 + 2);
+
+    recvd.assert_count::<UpdateMobEffectS2c>(1);
+    recvd.assert_order::<(RespawnS2c, UpdateMobEffectS2c)>();
+    let effect = recvd.first::<UpdateMobEffectS2c>();
+    assert_eq!(effect.entity_id, VarInt(entity_id));
+    assert_eq!(
+        effect.effect_id,
+        VarInt(i32::from(StatusEffect::Speed.to_raw()))
+    );
+
+    recvd.assert_count::<SetEntityDataS2c>(1);
+    recvd.assert_order::<(RespawnS2c, SetEntityDataS2c)>();
+    assert_eq!(
+        recvd.first::<SetEntityDataS2c>().entity_id,
+        VarInt(entity_id)
+    );
+
+    recvd.assert_count::<UpdateAttributesS2c>(1);
+    recvd.assert_order::<(RespawnS2c, UpdateAttributesS2c)>();
+    let attributes = recvd.first::<UpdateAttributesS2c>();
+    assert_eq!(attributes.entity_id, VarInt(entity_id));
+    let speed = attributes
+        .properties
+        .iter()
+        .find(|p| p.id == VarInt(EntityAttribute::MovementSpeed.get_id().into()))
+        .expect("movement speed attribute is re-sent");
+    assert_eq!(speed.modifiers.len(), 1);
+
+    recvd.assert_count::<SetHealthS2c>(1);
+    recvd.assert_order::<(RespawnS2c, SetHealthS2c)>();
 }
 
 #[test]

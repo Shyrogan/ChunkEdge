@@ -198,6 +198,13 @@ fn level_name<'a>(codec: &'a RegistryCodec, chunk_layer: &ChunkLayer) -> Ident<C
         )
 }
 
+/// Sends the respawn packet when a client switches chunk layers.
+///
+/// The respawn packet replaces the client-side player, so the client loses its
+/// effects, permission level, entity data and attribute modifiers. Layer
+/// changes also serve as death respawns, so no data is kept here (as in a
+/// vanilla death respawn) and the systems owning that state re-send it after
+/// this one.
 pub(super) fn respawn(
     codec: Res<RegistryCodec>,
     mut clients: Query<
@@ -260,7 +267,14 @@ pub(super) fn respawn(
 /// This also closes the "downloading terrain" screen when first joining, so
 /// it should happen after the initial chunks are written.
 pub(super) fn update_respawn_position(
-    mut clients: Query<(&mut Client, &RespawnPosition), Changed<RespawnPosition>>,
+    mut clients: Query<
+        (&mut Client, &RespawnPosition),
+        Or<(
+            Changed<RespawnPosition>,
+            // A respawn into another level resets the client-side spawn position.
+            Changed<VisibleChunkLayer>,
+        )>,
+    >,
 ) {
     for (mut client, respawn_pos) in &mut clients {
         client.write_packet(&SetDefaultSpawnPositionS2c {
