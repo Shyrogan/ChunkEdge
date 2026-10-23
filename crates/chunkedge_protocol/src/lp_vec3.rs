@@ -8,6 +8,66 @@ use derive_more::{From, Into};
 #[derive(Copy, Clone, Default, Debug, PartialEq, From, Into)]
 pub struct LpVec3(pub [f64; 3]);
 
+impl LpVec3 {
+    /// The vector a vanilla client reads after this one is sent: the 15-bit
+    /// quantization relative to the shared scale factor, bit for bit.
+    ///
+    /// Equal to encoding then decoding, without the byte round trip.
+    #[must_use]
+    pub fn quantized(self) -> Self {
+        Self::from_wire(self.to_wire())
+    }
+
+    fn to_wire(self) -> Wire {
+        let [x, y, z] = self.0.map(|v| {
+            if v.is_nan() {
+                0.0
+            } else {
+                v.clamp(-ABS_MAX_VALUE, ABS_MAX_VALUE)
+            }
+        });
+
+        let chessboard_length = x.abs().max(y.abs()).max(z.abs());
+
+        if chessboard_length < ABS_MIN_VALUE {
+            return Wire::Zero;
+        }
+
+        let scale = chessboard_length.ceil() as u64;
+        let markers = if is_partial(scale) {
+            scale & SCALE_BITS_MASK | CONTINUATION_FLAG
+        } else {
+            scale
+        };
+
+        Wire::Packed {
+            buffer: markers
+                | (pack(x / scale as f64) << 3)
+                | (pack(y / scale as f64) << 18)
+                | (pack(z / scale as f64) << 33),
+            scale,
+        }
+    }
+
+    fn from_wire(wire: Wire) -> Self {
+        match wire {
+            Wire::Zero => Self([0.0; 3]),
+            Wire::Packed { buffer, scale } => Self(
+                [buffer >> 3, buffer >> 18, buffer >> 33]
+                    .map(|packed| unpack(packed) * scale as f64),
+            ),
+        }
+    }
+}
+
+/// The form vanilla puts on the wire: either a single zero byte, or 48 bits
+/// holding the scale markers and three 15-bit components, followed by the
+/// rest of the scale when it doesn't fit in the markers.
+enum Wire {
+    Zero,
+    Packed { buffer: u64, scale: u64 },
+}
+
 const DATA_BITS_MASK: u64 = 0x7fff;
 const MAX_QUANTIZED_VALUE: f64 = 32766.0;
 const SCALE_BITS_MASK: u64 = 0x3;
@@ -15,6 +75,12 @@ const CONTINUATION_FLAG: u64 = 0x4;
 const ABS_MAX_VALUE: f64 = 1.7179869183E10;
 const ABS_MIN_VALUE: f64 = 0.00003051944088384301;
 
+fn is_partial(scale: u64) -> bool {
+    (scale & SCALE_BITS_MASK) != scale
+}
+
+/// Vanilla rounds with `Math.round`. The argument is never negative, where
+/// it agrees with Rust's `round`.
 fn pack(value: f64) -> u64 {
     ((value * 0.5 + 0.5) * MAX_QUANTIZED_VALUE).round() as u64
 }
@@ -28,33 +94,10 @@ fn unpack(value: u64) -> f64 {
 /// per tick, is quantized to 15 bits relative to a shared scale factor.
 impl Encode for LpVec3 {
     fn encode(&self, mut w: impl Write) -> anyhow::Result<()> {
-        let [x, y, z] = self.0.map(|v| {
-            if v.is_nan() {
-                0.0
-            } else {
-                v.clamp(-ABS_MAX_VALUE, ABS_MAX_VALUE)
-            }
-        });
-
-        let chessboard_length = x.abs().max(y.abs()).max(z.abs());
-
-        if chessboard_length < ABS_MIN_VALUE {
+        let Wire::Packed { buffer, scale } = self.to_wire() else {
             w.write_all(&[0]).context("failed to write velocity")?;
             return Ok(());
-        }
-
-        let scale = chessboard_length.ceil() as u64;
-        let is_partial = (scale & SCALE_BITS_MASK) != scale;
-        let markers = if is_partial {
-            scale & SCALE_BITS_MASK | CONTINUATION_FLAG
-        } else {
-            scale
         };
-
-        let buffer = markers
-            | (pack(x / scale as f64) << 3)
-            | (pack(y / scale as f64) << 18)
-            | (pack(z / scale as f64) << 33);
 
         // Two raw bytes followed by a big-endian int
         // (`FriendlyByteBuf.writeInt`).
@@ -63,7 +106,7 @@ impl Encode for LpVec3 {
         w.write_all(&((buffer >> 16) as u32).to_be_bytes())
             .context("failed to write velocity")?;
 
-        if is_partial {
+        if is_partial(scale) {
             VarInt((scale >> 2) as i32)
                 .encode(&mut w)
                 .context("failed to write velocity scale")?;
@@ -80,7 +123,7 @@ impl Decode<'_> for LpVec3 {
         *r = &r[1..];
 
         if lowest == 0 {
-            return Ok(Self([0.0; 3]));
+            return Ok(Self::from_wire(Wire::Zero));
         }
 
         ensure!(r.len() >= 5, "unexpected end of input decoding velocity");
@@ -89,15 +132,128 @@ impl Decode<'_> for LpVec3 {
         let highest = u64::from(u32::from_be_bytes([r[1], r[2], r[3], r[4]]));
         *r = &r[5..];
 
-        let buffer = highest << 16 | middle << 8 | lowest;
-
         let mut scale = lowest & SCALE_BITS_MASK;
         if lowest & CONTINUATION_FLAG == CONTINUATION_FLAG {
             scale |= u64::from(VarInt::decode(r)?.0 as u32) << 2;
         }
 
-        Ok(Self(
-            [buffer >> 3, buffer >> 18, buffer >> 33].map(|packed| unpack(packed) * scale as f64),
-        ))
+        Ok(Self::from_wire(Wire::Packed {
+            buffer: highest << 16 | middle << 8 | lowest,
+            scale,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Generated by running vanilla 26.2 `LpVec3.write` and `LpVec3.read` in
+    /// jshell: the input, the bytes written and the vector read back, with
+    /// doubles as raw bits.
+    const VANILLA: &[([u64; 3], &str, [u64; 3])] = &[
+        ([0x0, 0x0, 0x0], "00", [0x0, 0x0, 0x0]),
+        ([0x3ee4f8b588e368f1, 0x0, 0x0], "00", [0x0, 0x0, 0x0]),
+        (
+            [0x3fd999999999999a, 0x3fd71758e7ae147b, 0xbfd999999999999a],
+            "c1cc4ccd5c5a",
+            [0x3fd9996665999668, 0x3fd7175c5d7175c4, 0xbfd9996665999666],
+        ),
+        (
+            [0xbfb999999999999a, 0x3fc999999999999a, 0x3fd3333333333333],
+            "c9cca6653331",
+            [0xbfb9986661998668, 0x3fc99a666999a668, 0x3fd3334ccd3334cc],
+        ),
+        (
+            [0x3fe0000000000000, 0xbfb41205c28f5c29, 0x3fd0000000000000],
+            "f9ff9ffeebee",
+            [0x3fe0004001000400, 0xbfb4105041410508, 0x3fd0004001000400],
+        ),
+        (
+            [0x3ff0000000000000, 0x3ff0000000000000, 0x3ff0000000000000],
+            "f1fffffdfffb",
+            [0x3ff0000000000000, 0x3ff0000000000000, 0x3ff0000000000000],
+        ),
+        (
+            [0x3ff8000000000000, 0xc002000000000000, 0x3fe8000000000000],
+            "fbff9ffe4002",
+            [0x3ff8006001800600, 0xc001ffe7ff9ffe80, 0x3fe8006001800600],
+        ),
+        (
+            [0x4008000000000000, 0x0, 0xc008000000000000],
+            "f3ff0000ffff",
+            [0x4008000000000000, 0x0, 0xc008000000000000],
+        ),
+        (
+            [0x4010000000000000, 0x3fb999999999999a, 0x3fb999999999999a],
+            "f4ff8333066701",
+            [0x4010000000000000, 0x3fb9a066819a0680, 0x3fb9a066819a0680],
+        ),
+        (
+            [0x401d333333333333, 0xbfdae147ae147ae1, 0x3f50624dd2f1a9fc],
+            "24d38002f28f02",
+            [0x401d32f4cbd32f4c, 0xbfdae06b81ae06c0, 0x3f50004001000000],
+        ),
+        (
+            [0xc029000000000000, 0x400e000000000000, 0x40590ccccccccccd],
+            "9dc0fef9097d19",
+            [0xc029014405101443, 0x400dfc77f1dfc77f, 0x40590cb532d4cb53],
+        ),
+        ([0x3f00000000000000, 0x0, 0x0], "00", [0x0, 0x0, 0x0]),
+        (
+            [0x4212a05f20000000, 0xc212a05f20000000, 0x0],
+            "f7ff7ffe0003ffffffff0f",
+            [0x420ffffffff80000, 0xc20ffffffff80000, 0x0],
+        ),
+        (
+            [0x7ff8000000000000, 0x3fe0000000000000, 0xbfe0000000000000],
+            "f9ff40017ffd",
+            [0x0, 0x3fe0004001000400, 0xbfdfff7ffdfff800],
+        ),
+        (
+            [0x3fbf9add3739635f, 0xbfef9add3c0e56b8, 0x3fe1c71c71bf79c2],
+            "313fc71a032a",
+            [0x3fbf9c7e71f9c7e0, 0xbfef9afe6bf9afe7, 0x3fe1c7471d1c7472],
+        ),
+        (
+            [0x3fa999999999999a, 0x0, 0xbfa999999999999a],
+            "91197998fffe",
+            [0x3fa9986661998660, 0x0, 0xbfa9986661998660],
+        ),
+        (
+            [0xbff0000000000000, 0xbff0000000000000, 0xbff0000000000000],
+            "010000000000",
+            [0xbff0000000000000, 0xbff0000000000000, 0xbff0000000000000],
+        ),
+        (
+            [0x3fefffffca501acb, 0x0, 0x0],
+            "f1ff7ffeffff",
+            [0x3ff0000000000000, 0x0, 0x0],
+        ),
+        (
+            [0x40c81cd6c8b43958, 0xbfe0000000000000, 0x3fd0000000000000],
+            "f6ff7ffefffb8e18",
+            [0x40c81d0000000000, 0xbfe81d607581d000, 0x0],
+        ),
+    ];
+
+    #[test]
+    fn matches_vanilla() {
+        for &(input, bytes, read) in VANILLA {
+            let vec = LpVec3(input.map(f64::from_bits));
+
+            let mut written = vec![];
+            vec.encode(&mut written).unwrap();
+            let hex: String = written.iter().map(|b| format!("{b:02x}")).collect();
+            assert_eq!(hex, bytes, "bytes written for {vec:?}");
+
+            let decoded = LpVec3::decode(&mut written.as_slice()).unwrap();
+            assert_eq!(decoded.0.map(f64::to_bits), read, "vector read for {vec:?}");
+            assert_eq!(
+                vec.quantized().0.map(f64::to_bits),
+                read,
+                "quantized {vec:?}"
+            );
+        }
     }
 }
