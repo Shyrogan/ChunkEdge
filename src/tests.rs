@@ -1,3 +1,4 @@
+mod abilities;
 mod boss_bar;
 mod client;
 mod equipment;
