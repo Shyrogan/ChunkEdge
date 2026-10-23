@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chunkedge_build_utils::{ident, rerun_if_changed};
 use heck::{ToPascalCase, ToShoutySnakeCase};
@@ -11,6 +11,9 @@ struct TopLevel {
     blocks: Vec<Block>,
     shapes: Vec<Shape>,
     voxel_shapes: Vec<VoxelShape>,
+    /// Collision shapes that vanilla only gives to some entities, by name, as
+    /// indices into `voxel_shapes`.
+    entity_collision_shapes: BTreeMap<String, u16>,
     block_entity_types: Vec<BlockEntityKind>,
 }
 
@@ -90,6 +93,7 @@ pub(crate) fn build() -> anyhow::Result<TokenStream> {
         blocks,
         shapes,
         voxel_shapes,
+        entity_collision_shapes,
         block_entity_types,
     } = serde_json::from_str(include_str!("../extracted/blocks.json"))?;
 
@@ -228,6 +232,21 @@ pub(crate) fn build() -> anyhow::Result<TokenStream> {
         state_to_voxel_shape[usize::from(state.id)] = state.collision_voxel_shape;
     }
     let state_count = state_to_voxel_shape.len();
+
+    let entity_collision_shape_fns = entity_collision_shapes
+        .iter()
+        .map(|(name, &idx)| {
+            let docs = entity_collision_shape_docs(name)?;
+            let name = ident(name);
+            let idx = usize::from(idx);
+            Ok(quote! {
+                #(#[doc = #docs])*
+                pub fn #name() -> &'static Self {
+                    &VOXEL_SHAPES[#idx]
+                }
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
 
     let state_to_collision_shapes_arms = blocks
         .iter()
@@ -648,6 +667,10 @@ pub(crate) fn build() -> anyhow::Result<TokenStream> {
             #(#state_to_voxel_shape,)*
         ];
 
+        impl VoxelShape {
+            #(#entity_collision_shape_fns)*
+        }
+
         impl BlockState {
             #[doc = "Returns the default block state for a given block type."]
             pub const fn from_kind(kind: BlockKind) -> Self {
@@ -1046,5 +1069,38 @@ pub(crate) fn build() -> anyhow::Result<TokenStream> {
                 }
             }
         }
+    })
+}
+
+/// The doc comment of the [`VoxelShape`] function exposing the entity
+/// collision shape `name`, which says where vanilla keeps it and when it uses
+/// it.
+fn entity_collision_shape_docs(name: &str) -> anyhow::Result<&'static [&'static str]> {
+    Ok(match name {
+        "powder_snow_falling" => &[
+            "Vanilla's `PowderSnowBlock.FALLING_COLLISION_SHAPE`: the bottom 0.9 (as a",
+            "`float`) of the block. Powder snow collides with this shape for an entity",
+            "whose fall distance is over 2.5.",
+        ],
+        "scaffolding_stable" => &[
+            "Vanilla's `ScaffoldingBlock.SHAPE_STABLE`: the top slab and the four legs.",
+            "Scaffolding collides with this shape for an entity above the block that",
+            "isn't descending. It equals the shape",
+            "[`BlockState::collision_voxel_shape`] gives for scaffolding.",
+        ],
+        "scaffolding_unstable_bottom" => &[
+            "Vanilla's `ScaffoldingBlock.SHAPE_UNSTABLE_BOTTOM`: the bottom 2/16 of the",
+            "block. A hanging bottom piece of scaffolding (`DISTANCE` other than 0 and",
+            "`BOTTOM` set) collides with this shape for an entity above the block below",
+            "it, when the stable shape doesn't apply. Otherwise scaffolding collides with",
+            "nothing.",
+        ],
+        "full_block" => &[
+            "Vanilla's `Shapes.block()`: the full block. Powder snow collides with this",
+            "shape for an entity that can walk on it (one wearing leather boots, for",
+            "example) above the block and not descending. Powder snow collides with",
+            "nothing otherwise, unless [`Self::powder_snow_falling`] applies.",
+        ],
+        _ => anyhow::bail!("no documentation for entity collision shape `{name}`"),
     })
 }

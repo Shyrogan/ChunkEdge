@@ -219,4 +219,19 @@ mod tests {
             [(0, 0, 0), (0, 1, 0), (0, 2, 0)]
         );
     }
+
+    #[test]
+    fn scaffolding_stable_shape_is_the_no_entity_shape() {
+        assert_eq!(
+            VoxelShape::scaffolding_stable(),
+            BlockState::SCAFFOLDING.collision_voxel_shape()
+        );
+    }
+
+    #[test]
+    fn powder_snow_falling_shape_tops_out_at_float_point_nine() {
+        let shape = VoxelShape::powder_snow_falling();
+        assert_eq!(shape.coords(Axis::Y).last(), Some(&f64::from(0.9_f32)));
+        assert_eq!(full_cells(shape), [(0, 0, 0)]);
+    }
 }
