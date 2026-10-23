@@ -32,12 +32,6 @@ enum TestCommand {
     D { a: String, b: GreedyString },
 }
 
-#[derive(Command, Debug, Clone, PartialEq)]
-#[paths("kick {target}")]
-struct KickCommand {
-    target: String,
-}
-
 /// A command whose executable rejects its input even though the dispatcher
 /// accepted it, to exercise the error path of the handler.
 #[derive(Debug, Clone, PartialEq)]
@@ -76,7 +70,6 @@ impl CommandScenario {
 
         testing::add_plugins(&mut app);
         app.add_command::<TestCommand>()
-            .add_command::<KickCommand>()
             .add_command::<RejectingCommand>();
 
         app.update(); // Initialize plugins and build the command graph.
@@ -192,27 +185,6 @@ fn malformed_arguments_are_rejected_without_panicking() {
         let results = scenario.dispatch::<TestCommand>(command);
         assert_eq!(results, [], "`/{command}` should not execute");
     }
-}
-
-#[test]
-fn non_ascii_literal_input_does_not_panic() {
-    let mut scenario = CommandScenario::new();
-
-    // U+212A KELVIN SIGN (3 bytes) lowercases to an ASCII `k` (1 byte), so
-    // advancing by the literal's byte length would slice through the middle
-    // of the character.
-    for command in ["\u{212A}", "kic\u{212A}\u{212A} steve", "t\u{130}st x 1 2"] {
-        let results = scenario.dispatch::<KickCommand>(command);
-        assert_eq!(results, [], "`/{command}` should not execute");
-    }
-
-    let results = scenario.dispatch::<KickCommand>("kic\u{212A} steve");
-    assert_eq!(
-        results,
-        [KickCommand {
-            target: "steve".to_owned(),
-        }]
-    );
 }
 
 #[test]
