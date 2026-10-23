@@ -1,6 +1,8 @@
 mod abilities;
 mod boss_bar;
 mod client;
+#[cfg(feature = "command")]
+mod command;
 mod equipment;
 mod example;
 mod hunger;

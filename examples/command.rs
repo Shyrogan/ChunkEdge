@@ -122,14 +122,14 @@ impl Command for ComplexRedirectionCommand {
             .argument("a")
             .with_parser::<Vec3Parser>()
             .with_executable(|input| {
-                ComplexRedirectionCommand::A(Vec3Parser::parse_arg(input).unwrap())
+                Ok(ComplexRedirectionCommand::A(Vec3Parser::parse_arg(input)?))
             });
 
         let b = graph.literal("b").id();
 
         graph
             .at(b)
-            .with_executable(|_| ComplexRedirectionCommand::B);
+            .with_executable(|_| Ok(ComplexRedirectionCommand::B));
         graph.at(b).redirect_to(root);
 
         let c = graph.literal("c").id();
@@ -139,7 +139,7 @@ impl Command for ComplexRedirectionCommand {
             .argument("c")
             .with_parser::<Vec2Parser>()
             .with_executable(|input| {
-                ComplexRedirectionCommand::C(Vec2Parser::parse_arg(input).unwrap())
+                Ok(ComplexRedirectionCommand::C(Vec2Parser::parse_arg(input)?))
             });
 
         let d = graph
@@ -155,7 +155,7 @@ impl Command for ComplexRedirectionCommand {
 
         graph
             .at(d)
-            .with_executable(|_| ComplexRedirectionCommand::D);
+            .with_executable(|_| Ok(ComplexRedirectionCommand::D));
         graph.at(d).redirect_to(command_root);
 
         let e = graph.literal("e").id();
@@ -165,7 +165,7 @@ impl Command for ComplexRedirectionCommand {
             .argument("e")
             .with_parser::<Vec3Parser>()
             .with_executable(|input| {
-                ComplexRedirectionCommand::E(Vec3Parser::parse_arg(input).unwrap())
+                Ok(ComplexRedirectionCommand::E(Vec3Parser::parse_arg(input)?))
             });
     }
 }
