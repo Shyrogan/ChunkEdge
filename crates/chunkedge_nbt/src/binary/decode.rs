@@ -15,7 +15,7 @@ pub fn from_binary<'de, S>(slice: &mut &'de [u8]) -> Result<(Compound<S>, Option
 where
     S: FromModifiedUtf8<'de> + Hash + Ord,
 {
-    let mut state = DecodeState { slice, depth: 0 };
+    let mut state = DecodeState::new(slice, usize::MAX);
 
     let root_tag = state.read_tag()?;
 
@@ -41,7 +41,19 @@ pub fn from_unnamed_binary<'de, S>(slice: &mut &'de [u8]) -> Result<Compound<S>>
 where
     S: FromModifiedUtf8<'de> + Hash + Ord,
 {
-    let mut state = DecodeState { slice, depth: 0 };
+    from_unnamed_binary_with_quota(slice, usize::MAX)
+}
+
+/// Like [`from_unnamed_binary`], but fails once decoding would use more than
+/// `quota` bytes of memory. Use [`NETWORK_NBT_QUOTA`] for untrusted input.
+pub fn from_unnamed_binary_with_quota<'de, S>(
+    slice: &mut &'de [u8],
+    quota: usize,
+) -> Result<Compound<S>>
+where
+    S: FromModifiedUtf8<'de> + Hash + Ord,
+{
+    let mut state = DecodeState::new(slice, quota);
     let tag = state.read_tag()?;
     if tag != Tag::Compound {
         return Err(Error::new_owned(format!(
@@ -58,7 +70,19 @@ pub fn from_network_binary<'de, S>(slice: &mut &'de [u8]) -> Result<Compound<S>>
 where
     S: FromModifiedUtf8<'de> + Hash + Ord,
 {
-    let mut state = DecodeState { slice, depth: 0 };
+    from_network_binary_with_quota(slice, usize::MAX)
+}
+
+/// Like [`from_network_binary`], but fails once decoding would use more than
+/// `quota` bytes of memory. Use [`NETWORK_NBT_QUOTA`] for untrusted input.
+pub fn from_network_binary_with_quota<'de, S>(
+    slice: &mut &'de [u8],
+    quota: usize,
+) -> Result<Compound<S>>
+where
+    S: FromModifiedUtf8<'de> + Hash + Ord,
+{
+    let mut state = DecodeState::new(slice, quota);
 
     let compound = state.read_compound()?;
 
@@ -70,13 +94,44 @@ where
 /// Maximum recursion depth to prevent overflowing the call stack.
 const MAX_DEPTH: usize = 512;
 
+/// Memory budget for NBT read from the network, matching vanilla's
+/// `NbtAccounter.defaultQuota()`. Small NBT values are much larger in memory
+/// than on the wire (an empty compound is one byte encoded), so untrusted input
+/// must be decoded with a quota.
+pub const NETWORK_NBT_QUOTA: usize = 2 * 1024 * 1024;
+
+/// Approximate per-entry overhead of the compound map, on top of the key and
+/// value themselves.
+const COMPOUND_ENTRY_OVERHEAD: usize = 16;
+
 struct DecodeState<'a, 'de> {
     slice: &'a mut &'de [u8],
     /// Current recursion depth.
     depth: usize,
+    /// Bytes of memory the rest of the decode may still use.
+    quota: usize,
 }
 
-impl<'de> DecodeState<'_, 'de> {
+impl<'a, 'de> DecodeState<'a, 'de> {
+    fn new(slice: &'a mut &'de [u8], quota: usize) -> Self {
+        Self {
+            slice,
+            depth: 0,
+            quota,
+        }
+    }
+
+    /// Charges `bytes` against the memory quota.
+    fn account(&mut self, bytes: usize) -> Result<()> {
+        match self.quota.checked_sub(bytes) {
+            Some(rest) => {
+                self.quota = rest;
+                Ok(())
+            }
+            None => Err(Error::new_static("NBT exceeds memory quota")),
+        }
+    }
+
     #[inline]
     fn check_depth<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
         if self.depth >= MAX_DEPTH {
@@ -168,6 +223,8 @@ impl<'de> DecodeState<'_, 'de> {
             )));
         }
 
+        self.account(len as usize)?;
+
         let (left, right) = self.slice.split_at(len as usize);
 
         let array = left.iter().map(|b| *b as i8).collect();
@@ -187,6 +244,8 @@ impl<'de> DecodeState<'_, 'de> {
                 "string of length {len} exceeds remainder of input"
             )));
         }
+
+        self.account(len)?;
 
         let (left, right) = self.slice.split_at(len);
 
@@ -274,6 +333,8 @@ impl<'de> DecodeState<'_, 'de> {
             )));
         }
 
+        self.account((len as usize).saturating_mul(mem::size_of::<T>()))?;
+
         let mut list = Vec::with_capacity(if elem_size == 0 { 0 } else { len as usize });
 
         for _ in 0..len {
@@ -287,6 +348,7 @@ impl<'de> DecodeState<'_, 'de> {
     where
         S: FromModifiedUtf8<'de> + Hash + Ord,
     {
+        self.account(mem::size_of::<Compound<S>>())?;
         let mut compound = Compound::new();
 
         loop {
@@ -294,6 +356,8 @@ impl<'de> DecodeState<'_, 'de> {
             if tag == Tag::End {
                 return Ok(compound);
             }
+
+            self.account(mem::size_of::<(S, Value<S>)>() + COMPOUND_ENTRY_OVERHEAD)?;
 
             compound.insert(self.read_string::<S>()?, self.read_value::<S>(tag)?);
         }
@@ -313,6 +377,8 @@ impl<'de> DecodeState<'_, 'de> {
                 "int array of length {len} exceeds remainder of input"
             )));
         }
+
+        self.account(len as usize * mem::size_of::<i32>())?;
 
         let mut array = Vec::with_capacity(len as usize);
         for _ in 0..len {
@@ -336,6 +402,8 @@ impl<'de> DecodeState<'_, 'de> {
                 "long array of length {len} exceeds remainder of input"
             )));
         }
+
+        self.account(len as usize * mem::size_of::<i64>())?;
 
         let mut array = Vec::with_capacity(len as usize);
         for _ in 0..len {

@@ -1,5 +1,9 @@
+use crate::binary::NETWORK_NBT_QUOTA;
 use crate::tag::Tag;
-use crate::{Compound, List, Value, compound, from_binary, to_binary};
+use crate::{
+    Compound, List, Value, compound, from_binary, from_unnamed_binary,
+    from_unnamed_binary_with_quota, to_binary,
+};
 
 const ROOT_NAME: &str = "The root name‽";
 
@@ -85,6 +89,56 @@ fn deeply_nested_list_decode() {
 
     // Should not overflow the stack
     let _ = from_binary::<String>(&mut buf.as_slice());
+}
+
+/// Unnamed root compound holding one list of `len` empty compounds, followed by
+/// `present` encoded elements.
+fn list_of_empty_compounds(len: i32, present: usize) -> Vec<u8> {
+    let mut buf = vec![
+        Tag::Compound as u8,
+        Tag::List as u8,
+        0,
+        0,
+        Tag::Compound as u8,
+    ];
+    buf.extend(len.to_be_bytes());
+    buf.extend(std::iter::repeat_n(Tag::End as u8, present));
+    buf.push(Tag::End as u8);
+    buf
+}
+
+#[test]
+fn quota_rejects_cheap_wide_lists() {
+    // One byte per element on the wire, but each element is a whole `Compound`
+    // in memory.
+    let n = 200_000;
+    let buf = list_of_empty_compounds(n, n as usize);
+
+    let err = from_unnamed_binary_with_quota::<String>(&mut buf.as_slice(), NETWORK_NBT_QUOTA);
+    assert!(err.is_err());
+
+    // Trusted decoding (files) is not limited.
+    let ok = from_unnamed_binary::<String>(&mut buf.as_slice()).unwrap();
+    assert_eq!(ok.len(), 1);
+}
+
+#[test]
+fn quota_rejects_huge_list_length_up_front() {
+    let buf = list_of_empty_compounds(i32::MAX, 0);
+    let err = from_unnamed_binary_with_quota::<String>(&mut buf.as_slice(), NETWORK_NBT_QUOTA)
+        .unwrap_err();
+    assert!(err.to_string().contains("quota"), "{err}");
+}
+
+#[test]
+fn quota_accepts_normal_compounds() {
+    let compound = example_compound();
+    let mut buf = vec![Tag::Compound as u8];
+    crate::to_network_binary(&compound, &mut buf).unwrap();
+
+    let decoded =
+        from_unnamed_binary_with_quota::<String>(&mut buf.as_slice(), NETWORK_NBT_QUOTA).unwrap();
+    assert_eq!(decoded, compound);
 }
 
 fn example_compound() -> Compound {
