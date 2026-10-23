@@ -83,7 +83,12 @@ impl CommandScenario {
         let entity_layer = EntityLayer::new(app.world().resource::<Server>());
         let layer = app.world_mut().spawn((chunk_layer, entity_layer)).id();
 
-        let (mut client, helper) = create_mock_client("test");
+        let (mut client, helper) = create_mock_client(
+            "test",
+            &mut app
+                .world_mut()
+                .resource_mut::<chunkedge_server::entity::EntityManager>(),
+        );
         client.layer.0 = layer;
         client.visible_chunk_layer.0 = layer;
         client.visible_entity_layers.0.insert(layer);
