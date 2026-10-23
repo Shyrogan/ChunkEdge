@@ -26,7 +26,33 @@ impl Decode<'_> for SpectatorTarget {
     fn decode(r: &mut &[u8]) -> anyhow::Result<Self> {
         Ok(Self(match VarInt::decode(r)?.0 {
             0 => None,
-            n => Some(VarInt(n - 1)),
+            n => Some(VarInt(n.checked_sub(1).ok_or_else(|| {
+                anyhow::anyhow!("spectator target ID {n} out of range")
+            })?)),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_target_overflow() {
+        let mut buf = vec![];
+        VarInt(i32::MIN).encode(&mut buf).unwrap();
+        assert!(SpectatorTarget::decode(&mut buf.as_slice()).is_err());
+    }
+
+    #[test]
+    fn round_trip() {
+        for target in [SpectatorTarget(None), SpectatorTarget(Some(VarInt(41)))] {
+            let mut buf = vec![];
+            target.encode(&mut buf).unwrap();
+            assert_eq!(
+                SpectatorTarget::decode(&mut buf.as_slice()).unwrap(),
+                target
+            );
+        }
     }
 }

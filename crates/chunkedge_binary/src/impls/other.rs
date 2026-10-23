@@ -13,7 +13,7 @@ use chunkedge_text::color::RgbColor;
 use indexmap::IndexMap;
 use uuid::Uuid;
 
-use crate::{Decode, Encode, VarInt};
+use crate::{Decode, Encode, VarInt, cautious_capacity};
 
 impl<T: Encode> Encode for Option<T> {
     fn encode(&self, mut w: impl Write) -> anyhow::Result<()> {
@@ -63,9 +63,10 @@ impl Decode<'_> for Compound {
             return Ok(Compound::new());
         }
 
-        // TODO: consider if we need to bound the input slice or add some other
-        // mitigation to prevent excessive memory usage on hostile input.
-        Ok(chunkedge_nbt::from_unnamed_binary(r)?)
+        Ok(chunkedge_nbt::from_unnamed_binary_with_quota(
+            r,
+            chunkedge_nbt::NETWORK_NBT_QUOTA,
+        )?)
     }
 }
 
@@ -78,7 +79,10 @@ impl Encode for NetworkCompound {
 impl Decode<'_> for NetworkCompound {
     fn decode(r: &mut &[u8]) -> anyhow::Result<Self> {
         Ok(NetworkCompound {
-            compound: chunkedge_nbt::from_network_binary(r)?,
+            compound: chunkedge_nbt::from_network_binary_with_quota(
+                r,
+                chunkedge_nbt::NETWORK_NBT_QUOTA,
+            )?,
         })
     }
 }
@@ -227,8 +231,10 @@ impl<K: Encode, V: Encode> Encode for IndexMap<K, V> {
 
 impl<'a, K: Decode<'a> + Hash + Eq, V: Decode<'a>> Decode<'a> for IndexMap<K, V> {
     fn decode(r: &mut &'a [u8]) -> anyhow::Result<Self> {
-        let len = VarInt::decode(r)?.0 as usize;
-        let mut map = IndexMap::with_capacity(len);
+        let len = VarInt::decode(r)?.0;
+        anyhow::ensure!(len >= 0, "attempt to decode IndexMap with negative length");
+        let len = len as usize;
+        let mut map = IndexMap::with_capacity(cautious_capacity::<(K, V)>(len));
         for _ in 0..len {
             let key = K::decode(r)?;
             let value = V::decode(r)?;
