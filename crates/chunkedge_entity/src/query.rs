@@ -125,7 +125,7 @@ impl UpdateEntityQueryItem<'_, '_> {
             writer.write_packet(&EntityPositionSyncS2c {
                 entity_id,
                 position: self.pos.0,
-                velocity: self.velocity.0,
+                velocity: self.velocity.to_blocks_per_tick(),
                 yaw: self.look.yaw,
                 pitch: self.look.pitch,
                 on_ground: self.on_ground.0,
