@@ -12,6 +12,7 @@ use crate::protocol::packets::play::{
     PlayerPositionS2c, SetEntityDataS2c,
 };
 use crate::protocol::{Packet, VarInt};
+use crate::teleport::TeleportState;
 use crate::testing::{ScenarioSingleClient, create_mock_client};
 use crate::{ChunkPos, GameMode};
 
@@ -211,4 +212,35 @@ fn client_skin_layers_are_sent_to_other_clients() {
         .any(|pkt| pkt.tracked_values.0.windows(3).any(|w| w == [16, 0, 0x7f]));
 
     assert!(sent_all_layers, "model-part mask missing from tracked data");
+}
+
+#[test]
+fn unexpected_teleport_confirmation_disconnects_without_panicking() {
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    app.update();
+    helper.confirm_initial_pending_teleports();
+    app.update();
+
+    // No teleport is pending, but the client confirms the next teleport ID
+    // anyway. This used to underflow the pending teleport counter.
+    let next_id = app
+        .world()
+        .get::<TeleportState>(client)
+        .unwrap()
+        .teleport_id_counter();
+    helper.send(&AcceptTeleportationC2s {
+        teleport_id: (next_id as i32).into(),
+        position: DVec3::ZERO,
+        yaw: 0.0,
+        pitch: 0.0,
+    });
+    app.update();
+
+    assert!(app.world().get::<Client>(client).is_none());
 }

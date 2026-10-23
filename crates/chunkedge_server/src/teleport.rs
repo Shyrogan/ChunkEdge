@@ -145,6 +145,7 @@ fn handle_teleport_confirmations(
                     packet.client
                 );
                 commands.entity(packet.client).remove::<Client>();
+                continue;
             }
 
             let got = pkt.teleport_id.0 as u32;
