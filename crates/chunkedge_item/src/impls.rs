@@ -5,6 +5,7 @@ use chunkedge_generated::item::ItemKind;
 use chunkedge_generated::item_component_type as component_id;
 
 use crate::components::{BlockPredicate, ExactComponentMatcher, ItemComponent, Patchable};
+use crate::limits::{DecodeBudget, MAX_CHARGED_PROJECTILES, MAX_CONTAINER_ITEMS, read_count};
 use crate::vanilla_components::ItemKindExt;
 use crate::{HashedItemStack, ItemStack, MAX_RECURSION_DEPTH, NUM_ITEM_COMPONENTS};
 
@@ -291,17 +292,29 @@ pub fn decode_item_stack_recursive(
     depth: usize,
     prefixed: bool,
 ) -> anyhow::Result<ItemStack> {
+    decode_item_stack_budgeted(r, depth, prefixed, &mut DecodeBudget::new())
+}
+
+fn decode_item_stack_budgeted(
+    r: &mut &[u8],
+    depth: usize,
+    prefixed: bool,
+    budget: &mut DecodeBudget,
+) -> anyhow::Result<ItemStack> {
     if depth > MAX_RECURSION_DEPTH {
         return Err(anyhow::anyhow!("ItemStack recursion limit exceeded"));
     }
+    budget.charge::<ItemStack>()?;
 
     let count = VarInt::decode(r)?.0;
     if count <= 0 {
         return Ok(ItemStack::EMPTY);
     }
     let item = ItemKind::decode(r)?;
+    let count = i8::try_from(count)
+        .map_err(|_| anyhow::anyhow!("item stack count {count} out of range"))?;
 
-    decode_stack_components(r, item, count as i8, depth, prefixed)
+    decode_stack_components(r, item, count, depth, prefixed, budget)
 }
 
 pub(crate) fn decode_item_stack_template(r: &mut &[u8]) -> anyhow::Result<ItemStack> {
@@ -311,7 +324,7 @@ pub(crate) fn decode_item_stack_template(r: &mut &[u8]) -> anyhow::Result<ItemSt
         item != ItemKind::Air && (1..=i32::from(i8::MAX)).contains(&count),
         "Item stack template must have a non-air item and a count between 1 and 127"
     );
-    decode_stack_components(r, item, count as i8, 0, false)
+    decode_stack_components(r, item, count as i8, 0, false, &mut DecodeBudget::new())
 }
 
 fn decode_stack_components(
@@ -320,6 +333,7 @@ fn decode_stack_components(
     count: i8,
     depth: usize,
     prefixed: bool,
+    budget: &mut DecodeBudget,
 ) -> anyhow::Result<ItemStack> {
     let mut components = item.default_components();
 
@@ -340,7 +354,8 @@ fn decode_stack_components(
             None
         }; // TODO: Use prefix?
 
-        let component = decode_item_component(r, id, depth)?;
+        budget.charge::<ItemComponent>()?;
+        let component = decode_item_component(r, id, depth, budget)?;
         let hash = component.hash();
         components[id] = Patchable::Added((Box::new(component), hash));
     }
@@ -361,19 +376,25 @@ fn decode_stack_components(
     })
 }
 
-fn decode_block_predicate(r: &mut &[u8], depth: usize) -> anyhow::Result<BlockPredicate> {
+fn decode_block_predicate(
+    r: &mut &[u8],
+    depth: usize,
+    budget: &mut DecodeBudget,
+) -> anyhow::Result<BlockPredicate> {
+    budget.charge::<BlockPredicate>()?;
     Ok(BlockPredicate {
         blocks: Decode::decode(r)?,
         properties: Decode::decode(r)?,
         nbt: Decode::decode(r)?,
         exact_components: {
             // Vec = |len|item*len|
-            let length = VarInt::decode(r)?.0 as usize;
+            let length = read_count(r, usize::MAX)?;
             let mut vec = Vec::with_capacity(cautious_capacity::<ExactComponentMatcher>(length));
             for _ in 0..length {
                 let component_type = VarInt::decode(r)?;
+                budget.charge::<ExactComponentMatcher>()?;
                 let component_data =
-                    decode_item_component(r, component_type.0 as usize, depth + 1)?;
+                    decode_item_component(r, component_type.0 as usize, depth + 1, budget)?;
                 vec.push(ExactComponentMatcher {
                     component_type,
                     component_data,
@@ -389,7 +410,14 @@ pub(crate) fn decode_item_component(
     r: &mut &[u8],
     id: usize,
     depth: usize,
+    budget: &mut DecodeBudget,
 ) -> anyhow::Result<ItemComponent> {
+    // Block predicates nest components without going through an item stack, so
+    // the depth has to be checked here as well.
+    if depth > MAX_RECURSION_DEPTH {
+        return Err(anyhow::anyhow!("ItemComponent recursion limit exceeded"));
+    }
+
     Ok(match id {
         component_id::CUSTOM_DATA => ItemComponent::CustomData(Decode::decode(r)?),
         component_id::MAX_STACK_SIZE => ItemComponent::MaxStackSize(Decode::decode(r)?),
@@ -403,18 +431,18 @@ pub(crate) fn decode_item_component(
         component_id::RARITY => ItemComponent::Rarity(Decode::decode(r)?),
         component_id::ENCHANTMENTS => ItemComponent::Enchantments(Decode::decode(r)?),
         component_id::CAN_PLACE_ON => ItemComponent::CanPlaceOn({
-            let count = VarInt::decode(r)?.0;
-            let mut items = Vec::with_capacity(cautious_capacity::<BlockPredicate>(count as usize));
+            let count = read_count(r, usize::MAX)?;
+            let mut items = Vec::with_capacity(cautious_capacity::<BlockPredicate>(count));
             for _ in 0..count {
-                items.push(decode_block_predicate(r, depth)?);
+                items.push(decode_block_predicate(r, depth, budget)?);
             }
             items
         }),
         component_id::CAN_BREAK => ItemComponent::CanBreak({
-            let count = VarInt::decode(r)?.0;
-            let mut items = Vec::with_capacity(cautious_capacity::<BlockPredicate>(count as usize));
+            let count = read_count(r, usize::MAX)?;
+            let mut items = Vec::with_capacity(cautious_capacity::<BlockPredicate>(count));
             for _ in 0..count {
-                items.push(decode_block_predicate(r, depth)?);
+                items.push(decode_block_predicate(r, depth, budget)?);
             }
             items
         }),
@@ -451,9 +479,9 @@ pub(crate) fn decode_item_component(
             has_consume_particles: Decode::decode(r)?,
             effects: Decode::decode(r)?,
         },
-        component_id::USE_REMAINDER => {
-            ItemComponent::UseRemainder(Box::new(decode_item_stack_recursive(r, depth + 1, false)?))
-        }
+        component_id::USE_REMAINDER => ItemComponent::UseRemainder(Box::new(
+            decode_item_stack_budgeted(r, depth + 1, false, budget)?,
+        )),
         component_id::USE_COOLDOWN => ItemComponent::UseCooldown {
             seconds: Decode::decode(r)?,
             cooldown_group: Decode::decode(r)?,
@@ -510,18 +538,18 @@ pub(crate) fn decode_item_component(
         component_id::MAP_DECORATIONS => ItemComponent::MapDecorations(Decode::decode(r)?),
         component_id::MAP_POST_PROCESSING => ItemComponent::MapPostProcessing(Decode::decode(r)?),
         component_id::CHARGED_PROJECTILES => {
-            let count = VarInt::decode(r)?.0;
-            let mut items = Vec::with_capacity(cautious_capacity::<ItemStack>(count as usize));
+            let count = read_count(r, MAX_CHARGED_PROJECTILES)?;
+            let mut items = Vec::with_capacity(cautious_capacity::<ItemStack>(count));
             for _ in 0..count {
-                items.push(decode_item_stack_recursive(r, depth + 1, false)?);
+                items.push(decode_item_stack_budgeted(r, depth + 1, false, budget)?);
             }
             ItemComponent::ChargedProjectiles(items)
         }
         component_id::BUNDLE_CONTENTS => {
-            let count = VarInt::decode(r)?.0;
-            let mut items = Vec::with_capacity(cautious_capacity::<ItemStack>(count as usize));
+            let count = read_count(r, usize::MAX)?;
+            let mut items = Vec::with_capacity(cautious_capacity::<ItemStack>(count));
             for _ in 0..count {
-                items.push(decode_item_stack_recursive(r, depth + 1, false)?);
+                items.push(decode_item_stack_budgeted(r, depth + 1, false, budget)?);
             }
             ItemComponent::BundleContents(items)
         }
@@ -593,10 +621,10 @@ pub(crate) fn decode_item_component(
         component_id::BASE_COLOR => ItemComponent::BaseColor(Decode::decode(r)?),
         component_id::POT_DECORATIONS => ItemComponent::PotDecorations(Decode::decode(r)?),
         component_id::CONTAINER => {
-            let count = VarInt::decode(r)?.0;
-            let mut items = Vec::with_capacity(cautious_capacity::<ItemStack>(count as usize));
+            let count = read_count(r, MAX_CONTAINER_ITEMS)?;
+            let mut items = Vec::with_capacity(cautious_capacity::<ItemStack>(count));
             for _ in 0..count {
-                items.push(decode_item_stack_recursive(r, depth + 1, false)?);
+                items.push(decode_item_stack_budgeted(r, depth + 1, false, budget)?);
             }
             ItemComponent::Container(items)
         }
@@ -707,7 +735,9 @@ impl Decode<'_> for HashedItemStack {
 
             Ok(Self {
                 item,
-                count: item_count.0 as i8,
+                count: i8::try_from(item_count.0).map_err(|_| {
+                    anyhow::anyhow!("item stack count {} out of range", item_count.0)
+                })?,
                 components,
             })
         }

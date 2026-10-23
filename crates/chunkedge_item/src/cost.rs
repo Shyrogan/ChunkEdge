@@ -2,6 +2,7 @@ use std::io::Write;
 
 use chunkedge_binary::{Decode, Encode, VarInt, cautious_capacity};
 
+use crate::limits::DecodeBudget;
 use crate::{ItemComponent, ItemKind, impls::decode_item_component};
 
 /// An item and exact component predicates required by a merchant offer.
@@ -35,10 +36,11 @@ impl Decode<'_> for ItemCost {
         let len = VarInt::decode(r)?.0;
         anyhow::ensure!(len >= 0, "negative item cost component count");
         let mut components = Vec::with_capacity(cautious_capacity::<ItemComponent>(len as usize));
+        let mut budget = DecodeBudget::new();
         for _ in 0..len {
             let id = VarInt::decode(r)?.0;
             anyhow::ensure!(id >= 0, "negative item cost component ID");
-            components.push(decode_item_component(r, id as usize, 0)?);
+            components.push(decode_item_component(r, id as usize, 0, &mut budget)?);
         }
         Ok(Self {
             item,
