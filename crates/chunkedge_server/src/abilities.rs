@@ -33,7 +33,8 @@ impl Default for FovModifier {
     }
 }
 
-/// Send if the client sends [`PlayerAbilitiesC2s::StartFlying`]
+/// Sent when the client sends [`PlayerAbilitiesC2s::StartFlying`] and is
+/// allowed to fly ([`PlayerAbilitiesFlags::allow_flying`]).
 #[derive(Message)]
 pub struct PlayerStartFlyingMessage {
     pub client: Entity,
@@ -159,11 +160,16 @@ fn update_server_player_abilities(
         {
             let flags = mut_flags.bypass_change_detection();
             match pkt {
+                // Vanilla sets `flying = packet.isFlying() && mayfly` and does not
+                // resync the client when it refuses.
                 PlayerAbilitiesC2s::StartFlying => {
-                    flags.set_flying(true);
-                    player_start_flying_message_writer.write(PlayerStartFlyingMessage {
-                        client: packets.client,
-                    });
+                    let allowed = flags.allow_flying();
+                    flags.set_flying(allowed);
+                    if allowed {
+                        player_start_flying_message_writer.write(PlayerStartFlyingMessage {
+                            client: packets.client,
+                        });
+                    }
                 }
                 PlayerAbilitiesC2s::StopFlying => {
                     flags.set_flying(false);
