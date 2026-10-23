@@ -697,7 +697,11 @@ fn update_chunk_load_dist(
     }
 }
 
-fn handle_layer_messages(
+/// Sends each client the messages its layers buffered this tick, using the
+/// client's old view and old visible layers. Systems that send a client
+/// per-client packets for its view changes should run after this and before
+/// [`update_view_and_layers`], so those packets follow the layer messages.
+pub fn handle_layer_messages(
     mut clients: Query<(
         Entity,
         &EntityId,
@@ -1007,7 +1011,10 @@ fn report_sent_velocities(
     }
 }
 
-pub(crate) fn update_view_and_layers(
+/// Loads and unloads chunks and entities for clients whose view or visible
+/// layers changed, then sets [`OldVisibleChunkLayer`] and
+/// [`OldVisibleEntityLayers`] to the current values.
+pub fn update_view_and_layers(
     mut clients: Query<
         (
             Entity,
