@@ -1,6 +1,8 @@
 package com.chunkedge.extractor.extractors;
 
 import com.chunkedge.extractor.Main;
+import com.chunkedge.extractor.mixin.ExposePowderSnowBlock;
+import com.chunkedge.extractor.mixin.ExposeScaffoldingBlock;
 import com.chunkedge.extractor.mixin.ExposeVoxelShape;
 import com.chunkedge.extractor.mixin.ExposeWallBlock;
 import com.google.gson.JsonArray;
@@ -16,6 +18,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.StandingAndWallBlockItem;
 import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class Blocks implements Main.Extractor {
@@ -191,6 +194,34 @@ public class Blocks implements Main.Extractor {
             shapesJson.add(shapeJson);
         }
 
+        // Collision shapes that depend on the entity, so no block state's
+        // collision_voxel_shape (computed without an entity) can give them.
+        var entityCollisionShapes = new LinkedHashMap<String, VoxelShape>();
+        entityCollisionShapes.put(
+            "powder_snow_falling",
+            ExposePowderSnowBlock.getFallingCollisionShape()
+        );
+        entityCollisionShapes.put(
+            "scaffolding_stable",
+            ExposeScaffoldingBlock.getStableShape()
+        );
+        entityCollisionShapes.put(
+            "scaffolding_unstable_bottom",
+            ExposeScaffoldingBlock.getUnstableBottomShape()
+        );
+        entityCollisionShapes.put("full_block", Shapes.block());
+
+        var entityCollisionShapesJson = new JsonObject();
+        entityCollisionShapes.forEach((name, shape) ->
+            entityCollisionShapesJson.addProperty(
+                name,
+                voxelShapes.computeIfAbsent(
+                    VoxelShapeData.of(shape),
+                    unused -> voxelShapes.size()
+                )
+            )
+        );
+
         var voxelShapesJson = new JsonArray();
         for (var voxelShape : voxelShapes.keySet()) {
             voxelShapesJson.add(voxelShape.toJson());
@@ -199,6 +230,7 @@ public class Blocks implements Main.Extractor {
         topLevelJson.add("block_entity_types", blockEntitiesJson);
         topLevelJson.add("shapes", shapesJson);
         topLevelJson.add("voxel_shapes", voxelShapesJson);
+        topLevelJson.add("entity_collision_shapes", entityCollisionShapesJson);
         topLevelJson.add("blocks", blocksJson);
 
         return topLevelJson;
