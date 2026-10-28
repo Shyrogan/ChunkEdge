@@ -1,15 +1,19 @@
+use bevy_ecs::message::Messages;
 use chunkedge_server::protocol::movement_flags::MovementFlags;
 
 use crate::abilities::PlayerAbilitiesFlags;
 use crate::client::Client;
+use crate::client_command::{PlayerCommand, StartFallFlyingMessage};
 use crate::entity::EntityId;
+use crate::entity::Pose;
 use crate::entity::avatar::PlayerModelParts;
+use crate::entity::entity::{self, Flags};
 use crate::layer::ChunkLayer;
 use crate::layer::chunk::UnloadedChunk;
 use crate::math::DVec3;
 use crate::protocol::packets::play::{
     AcceptTeleportationC2s, LoginS2c, MoveEntityPosS2c, MovePlayerPosRotC2s, PlayerCombatKillS2c,
-    PlayerPositionS2c, SetEntityDataS2c,
+    PlayerCommandC2s, PlayerPositionS2c, SetEntityDataS2c,
 };
 use crate::protocol::{Packet, VarInt};
 use crate::testing::{ScenarioSingleClient, create_mock_client};
@@ -208,4 +212,75 @@ fn client_skin_layers_are_sent_to_other_clients() {
         .any(|pkt| pkt.tracked_values.0.windows(3).any(|w| w == [16, 0, 0x7f]));
 
     assert!(sent_all_layers, "model-part mask missing from tracked data");
+}
+
+#[test]
+fn start_fall_flying_command_is_left_to_the_game() {
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    app.update();
+    helper.clear_received();
+
+    let entity_id = app.world().get::<EntityId>(client).unwrap().get();
+    helper.send(&PlayerCommandC2s {
+        entity_id: VarInt(entity_id),
+        action: PlayerCommand::StartFallFlying,
+        jump_boost: VarInt(0),
+    });
+    app.update();
+
+    let messages = app
+        .world()
+        .resource::<Messages<StartFallFlyingMessage>>()
+        .iter_current_update_messages()
+        .copied()
+        .collect::<Vec<_>>();
+    assert_eq!(messages, [StartFallFlyingMessage { client }]);
+    assert!(!app.world().get::<Flags>(client).unwrap().fall_flying());
+    assert_eq!(
+        app.world().get::<entity::Pose>(client).unwrap().0,
+        Pose::Standing
+    );
+    helper
+        .collect_received()
+        .assert_count::<SetEntityDataS2c>(0);
+}
+
+#[test]
+// Refusing a glide the way the vanilla server does (`stopFallFlying`) relies
+// on this: the flags go back to the client even though they didn't change.
+fn writing_unchanged_flags_resends_them() {
+    let ScenarioSingleClient {
+        mut app,
+        client,
+        mut helper,
+        ..
+    } = ScenarioSingleClient::new();
+
+    app.update();
+    helper.clear_received();
+
+    app.world_mut()
+        .get_mut::<Flags>(client)
+        .unwrap()
+        .set_fall_flying(false);
+    app.update();
+
+    let entity_id = app.world().get::<EntityId>(client).unwrap().get();
+    let tracked_values = helper
+        .collect_received()
+        .0
+        .iter()
+        .filter(|frame| frame.id == SetEntityDataS2c::ID)
+        .map(|frame| frame.decode::<SetEntityDataS2c>().unwrap())
+        .filter(|pkt| pkt.entity_id.0 == entity_id)
+        .map(|pkt| pkt.tracked_values.0.to_vec())
+        .collect::<Vec<_>>();
+    // Index 0 (shared flags), byte serializer (0), no flag set, terminator.
+    assert_eq!(tracked_values, [vec![0, 0, 0, 0xff]]);
 }

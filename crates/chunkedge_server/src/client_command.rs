@@ -16,6 +16,7 @@ impl Plugin for ClientCommandPlugin {
             .add_message::<SneakMessage>()
             .add_message::<JumpWithHorseMessage>()
             .add_message::<LeaveBedMessage>()
+            .add_message::<StartFallFlyingMessage>()
             .add_systems(
                 EventLoopPreUpdate,
                 (handle_client_command, handle_player_input),
@@ -67,12 +68,23 @@ pub struct LeaveBedMessage {
     pub client: Entity,
 }
 
+/// Sent when the client asks to start gliding. The client already glides on
+/// its own; whether the server accepts it, through
+/// [`Flags::set_fall_flying`] and [`Pose::FallFlying`], is up to the game.
+/// The vanilla server answers a refused start by sending the flags back, which
+/// writing them through [`Mut`] does even when they don't change.
+#[derive(Message, Copy, Clone, PartialEq, Eq, Debug)]
+pub struct StartFallFlyingMessage {
+    pub client: Entity,
+}
+
 fn handle_client_command(
     mut packets: MessageReader<PacketMessage>,
     mut clients: Query<&mut Flags>,
     mut sprinting_messages: MessageWriter<SprintMessage>,
     mut jump_with_horse_messages: MessageWriter<JumpWithHorseMessage>,
     mut leave_bed_messages: MessageWriter<LeaveBedMessage>,
+    mut start_fall_flying_messages: MessageWriter<StartFallFlyingMessage>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<PlayerCommandC2s>() {
@@ -117,9 +129,11 @@ fn handle_client_command(
                     });
                 }
                 PlayerCommand::OpenInventory => {} // TODO
-                // Whether the player may glide depends on what they wear, so
-                // the inventory plugin handles this command.
-                PlayerCommand::StartFallFlying => {}
+                PlayerCommand::StartFallFlying => {
+                    start_fall_flying_messages.write(StartFallFlyingMessage {
+                        client: packet.client,
+                    });
+                }
             }
         }
     }
@@ -141,14 +155,11 @@ pub(crate) fn handle_player_input(
             };
             let sneak = pkt.flags.sneak();
             if sneak != last_input.0.sneak() {
-                // A gliding player keeps the gliding pose.
-                if !flags.fall_flying() {
-                    pose.0 = if sneak {
-                        Pose::Sneaking
-                    } else {
-                        Pose::Standing
-                    };
-                }
+                pose.0 = if sneak {
+                    Pose::Sneaking
+                } else {
+                    Pose::Standing
+                };
                 flags.set_sneaking(sneak);
                 sneaking_messages.write(SneakMessage {
                     client: packet.client,
