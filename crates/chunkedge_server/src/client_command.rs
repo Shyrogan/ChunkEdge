@@ -16,6 +16,7 @@ impl Plugin for ClientCommandPlugin {
             .add_message::<SneakMessage>()
             .add_message::<JumpWithHorseMessage>()
             .add_message::<LeaveBedMessage>()
+            .add_message::<StartFallFlyingMessage>()
             .add_systems(
                 EventLoopPreUpdate,
                 (handle_client_command, handle_player_input),
@@ -67,12 +68,23 @@ pub struct LeaveBedMessage {
     pub client: Entity,
 }
 
+/// Sent when the client asks to start gliding. The client already glides on
+/// its own; whether the server accepts it, through
+/// [`Flags::set_fall_flying`] and [`Pose::FallFlying`], is up to the game.
+/// The vanilla server answers a refused start by sending the flags back, which
+/// writing them through [`Mut`] does even when they don't change.
+#[derive(Message, Copy, Clone, PartialEq, Eq, Debug)]
+pub struct StartFallFlyingMessage {
+    pub client: Entity,
+}
+
 fn handle_client_command(
     mut packets: MessageReader<PacketMessage>,
-    mut clients: Query<(&mut entity::Pose, &mut Flags)>,
+    mut clients: Query<&mut Flags>,
     mut sprinting_messages: MessageWriter<SprintMessage>,
     mut jump_with_horse_messages: MessageWriter<JumpWithHorseMessage>,
     mut leave_bed_messages: MessageWriter<LeaveBedMessage>,
+    mut start_fall_flying_messages: MessageWriter<StartFallFlyingMessage>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<PlayerCommandC2s>() {
@@ -83,7 +95,7 @@ fn handle_client_command(
                     });
                 }
                 PlayerCommand::StartSprinting => {
-                    if let Ok((_, mut flags)) = clients.get_mut(packet.client) {
+                    if let Ok(mut flags) = clients.get_mut(packet.client) {
                         flags.set_sprinting(true);
                     }
 
@@ -93,7 +105,7 @@ fn handle_client_command(
                     });
                 }
                 PlayerCommand::StopSprinting => {
-                    if let Ok((_, mut flags)) = clients.get_mut(packet.client) {
+                    if let Ok(mut flags) = clients.get_mut(packet.client) {
                         flags.set_sprinting(false);
                     }
 
@@ -118,11 +130,9 @@ fn handle_client_command(
                 }
                 PlayerCommand::OpenInventory => {} // TODO
                 PlayerCommand::StartFallFlying => {
-                    if let Ok((mut pose, _)) = clients.get_mut(packet.client) {
-                        pose.0 = Pose::FallFlying;
-                    }
-
-                    // TODO.
+                    start_fall_flying_messages.write(StartFallFlyingMessage {
+                        client: packet.client,
+                    });
                 }
             }
         }
