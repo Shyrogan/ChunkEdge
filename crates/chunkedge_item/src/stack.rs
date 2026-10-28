@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::io::Write;
 
@@ -170,6 +171,37 @@ impl ItemStack {
             }
         } else {
             None
+        }
+    }
+
+    /// Get a specific component by its ID as the client sees it: the stack's
+    /// own patch over the default components of its [`ItemKind`]. IDs are the
+    /// constants in [`item_component_type`](crate::item_component_type), or
+    /// [`ItemComponent::id`].
+    ///
+    /// Unlike [`ItemStack::get_component`], a component the stack doesn't
+    /// patch falls back to the item kind's default, and a component the stack
+    /// removed is `None` even when the item kind has it by default. An empty
+    /// stack has no components.
+    ///
+    /// ```
+    /// # use chunkedge_item::*;
+    /// let elytra = ItemStack::new(ItemKind::Elytra, 1);
+    /// assert!(elytra.get_component(item_component_type::GLIDER).is_none());
+    /// assert!(elytra.effective_component(item_component_type::GLIDER).is_some());
+    /// ```
+    pub fn effective_component<I: Into<usize>>(&self, id: I) -> Option<Cow<'_, ItemComponent>> {
+        if self.is_empty() {
+            return None;
+        }
+
+        let id = id.into();
+        match self.components.get(id)? {
+            Patchable::Added((component, _)) | Patchable::Default(component) => {
+                Some(Cow::Borrowed(&**component))
+            }
+            Patchable::Removed => None,
+            Patchable::None => self.item.default_component(id).map(Cow::Owned),
         }
     }
 

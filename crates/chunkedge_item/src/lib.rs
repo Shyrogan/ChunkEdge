@@ -11,6 +11,7 @@ pub(crate) const NUM_ITEM_COMPONENTS: usize = chunkedge_generated::item_componen
 pub(crate) const MAX_RECURSION_DEPTH: usize = 16;
 
 pub use chunkedge_generated::item::ItemKind;
+pub use chunkedge_generated::item_component_type;
 
 pub use crate::components::*;
 pub use crate::cost::ItemCost;
@@ -102,6 +103,50 @@ mod tests {
             stack.components[custom_name_id],
             Patchable::Removed
         ));
+    }
+
+    #[test]
+    fn effective_component_patches_item_kind_defaults() {
+        use std::borrow::Cow;
+
+        use item_component_type::{DAMAGE, EQUIPPABLE, GLIDER, MAX_DAMAGE};
+
+        let mut elytra = create_test_stack(ItemKind::Elytra, 1);
+
+        // Unpatched components are the item kind's defaults.
+        assert_eq!(
+            elytra.effective_component(GLIDER),
+            Some(Cow::Owned(ItemComponent::Glider))
+        );
+        assert!(matches!(
+            elytra.effective_component(EQUIPPABLE).as_deref(),
+            Some(ItemComponent::Equippable {
+                slot: EquipSlot::Chest,
+                ..
+            })
+        ));
+        assert_eq!(
+            elytra.effective_component(MAX_DAMAGE),
+            Some(Cow::Owned(ItemComponent::MaxDamage(VarInt(432))))
+        );
+
+        // An added component replaces the default, a removed one hides it.
+        elytra.insert_component(ItemComponent::Damage(VarInt(431)));
+        elytra.remove_component(GLIDER);
+        assert_eq!(
+            elytra.effective_component(DAMAGE),
+            Some(Cow::Borrowed(&ItemComponent::Damage(VarInt(431))))
+        );
+        assert_eq!(elytra.effective_component(GLIDER), None);
+        assert_eq!(elytra.get_component(GLIDER), None);
+
+        // Other kinds don't have the elytra's components, and an empty stack
+        // has none at all.
+        let diamond = create_test_stack(ItemKind::Diamond, 1);
+        assert_eq!(diamond.effective_component(GLIDER), None);
+        assert_eq!(diamond.effective_component(MAX_DAMAGE), None);
+        let empty = create_test_stack(ItemKind::Elytra, 0);
+        assert_eq!(empty.effective_component(GLIDER), None);
     }
 
     // --- Serialization Roundtrips ---

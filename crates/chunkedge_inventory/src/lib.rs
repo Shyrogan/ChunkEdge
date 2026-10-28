@@ -8,6 +8,7 @@ use std::ops::Range;
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use chunkedge_server::client::{Client, FlushPacketsSet, SpawnClientsSet};
+use chunkedge_server::entity::UpdateTrackedDataSet;
 use chunkedge_server::event_loop::{EventLoopPreUpdate, PacketMessage};
 use chunkedge_server::interact_block::InteractBlockMessage;
 pub use chunkedge_server::protocol::packets::play::container_click_c2s::{ClickMode, SlotChange};
@@ -25,6 +26,7 @@ use derive_more::{Deref, DerefMut};
 use player_inventory::PlayerInventory;
 use tracing::{debug, warn};
 
+mod fall_flying;
 pub mod player_inventory;
 mod validate;
 
@@ -48,6 +50,10 @@ impl Plugin for InventoryPlugin {
                 .before(FlushPacketsSet),
         )
         .add_systems(
+            PostUpdate,
+            fall_flying::update_fall_flying.before(UpdateTrackedDataSet),
+        )
+        .add_systems(
             EventLoopPreUpdate,
             (
                 handle_update_selected_slot,
@@ -56,6 +62,7 @@ impl Plugin for InventoryPlugin {
                 handle_close_handled_screen,
                 handle_player_actions,
                 resync_readonly_inventory_after_block_interaction,
+                fall_flying::handle_start_fall_flying,
             ),
         )
         .init_resource::<InventorySettings>()

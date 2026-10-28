@@ -2,6 +2,7 @@ mod boss_bar;
 mod client;
 mod equipment;
 mod example;
+mod fall_flying;
 mod hunger;
 mod inventory;
 mod layer;
