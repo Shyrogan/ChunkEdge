@@ -16,7 +16,10 @@ impl Plugin for WeatherPlugin {
         app.add_systems(
             PostUpdate,
             (
-                init_weather_on_layer_join,
+                // A layer change can respawn the client into a new client-side
+                // level, which starts without weather, so this must come after
+                // the respawn packet.
+                init_weather_on_layer_join.after(UpdateClientsSet),
                 change_client_rain_level,
                 change_client_thunder_level,
             )

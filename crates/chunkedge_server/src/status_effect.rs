@@ -12,7 +12,7 @@ use chunkedge_protocol::status_effects::StatusEffect;
 use chunkedge_protocol::{VarInt, WritePacket};
 
 use crate::EventLoopPostUpdate;
-use crate::client::Client;
+use crate::client::{Client, UpdateClientsSet, VisibleChunkLayer};
 
 /// Message for when a status effect is added to an entity or the amplifier or
 /// duration of an existing status effect is changed.
@@ -42,7 +42,31 @@ impl Plugin for StatusEffectPlugin {
                     update_active_status_effects,
                     add_status_effects,
                 ),
+            )
+            .add_systems(
+                PostUpdate,
+                resend_status_effects_after_respawn
+                    .in_set(UpdateClientsSet)
+                    .after(crate::spawn::respawn),
             );
+    }
+}
+
+/// Respawn replaces the client-side player, dropping its effects, so send
+/// every active effect again.
+fn resend_status_effects_after_respawn(
+    mut clients: Query<(&mut Client, &ActiveStatusEffects), Changed<VisibleChunkLayer>>,
+) {
+    for (mut client, active_effects) in &mut clients {
+        if client.is_added() {
+            // No respawn on the join tick, and new effects are sent as they are applied.
+            continue;
+        }
+
+        let entity_id = client.entity_id.get();
+        for effect in active_effects.get_current_effects() {
+            client.write_packet(&create_packet(entity_id, effect));
+        }
     }
 }
 
