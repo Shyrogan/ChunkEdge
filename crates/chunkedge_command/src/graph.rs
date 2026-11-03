@@ -80,8 +80,12 @@ use petgraph::dot::Dot;
 use petgraph::prelude::*;
 
 use crate::modifier_value::ModifierValue;
-use crate::parsers::{CommandArg, ParseInput};
+use crate::parsers::{CommandArg, CommandArgParseError, ParseInput};
 use crate::{CommandRegistry, CommandScopeRegistry};
+
+/// Builds a command from the arguments of the path that was matched, failing
+/// if one of them does not parse.
+pub type Executable<T> = fn(&mut ParseInput) -> Result<T, CommandArgParseError>;
 
 /// This struct is used to store the command graph. (see module level docs for
 /// more info)
@@ -228,8 +232,8 @@ impl<'a> From<CommandGraph<'a>> for CommandsS2c<'a> {
 ///    // (note: if you want an admin scope you should use the link method on the scope registry.)
 ///    .with_scopes(vec!["test:admin", "command:test"])
 ///    .with_parser::<i32>()
-///    // it is reasonably safe to unwrap here because we know that the argument is an integer
-///    .with_executable(|args| TestCommand { test: i32::parse_arg(args).unwrap() })
+///    // the executable re-parses the arguments and returns an error if they do not parse
+///    .with_executable(|args| Ok(TestCommand { test: i32::parse_arg(args)? }))
 ///    .id();
 ///
 /// // complex command (redirects back to the simple command)
@@ -255,7 +259,7 @@ impl<'a> From<CommandGraph<'a>> for CommandsS2c<'a> {
 pub struct CommandGraphBuilder<'a, T> {
     registry: &'a mut CommandRegistry,
     current_node: NodeIndex,
-    executables: &'a mut HashMap<NodeIndex, fn(&mut ParseInput) -> T>,
+    executables: &'a mut HashMap<NodeIndex, Executable<T>>,
     parsers: &'a mut HashMap<NodeIndex, fn(&mut ParseInput) -> bool>,
     modifiers: &'a mut HashMap<NodeIndex, fn(String, &mut HashMap<ModifierValue, ModifierValue>)>,
     scopes_added: Vec<String>, /* we need to keep track of added scopes so we can add them to
@@ -271,7 +275,7 @@ impl<'a, T> CommandGraphBuilder<'a, T> {
     #[allow(clippy::type_complexity)]
     pub fn new(
         registry: &'a mut CommandRegistry,
-        executables: &'a mut HashMap<NodeIndex, fn(&mut ParseInput) -> T>,
+        executables: &'a mut HashMap<NodeIndex, Executable<T>>,
         parsers: &'a mut HashMap<NodeIndex, fn(&mut ParseInput) -> bool>,
         modifiers: &'a mut HashMap<
             NodeIndex,
@@ -394,14 +398,16 @@ impl<'a, T> CommandGraphBuilder<'a, T> {
 
     /// Sets up the executable function for the current node. This function will
     /// be called when the command is executed and should parse the args and
-    /// return the `T` type.
+    /// return the `T` type. The args come from the player, so a parse error
+    /// must be returned rather than unwrapped: the command is then rejected
+    /// and the error is sent to the executor.
     ///
     /// # Arguments
     /// * executable - the executable function to add
     ///
     /// # Example
     /// have a look at the example for [`CommandGraphBuilder`]
-    pub fn with_executable(&mut self, executable: fn(&mut ParseInput) -> T) -> &mut Self {
+    pub fn with_executable(&mut self, executable: Executable<T>) -> &mut Self {
         let graph = &mut self.registry.graph.graph;
         let current_node = &mut self.current_node;
 
@@ -441,7 +447,7 @@ impl<'a, T> CommandGraphBuilder<'a, T> {
     ///        modifiers.insert("test".into(), "test".into()); // this will trigger when the node is passed
     ///     })
     ///     .literal("command") // add a literal node then transition to it
-    ///     .with_executable(|_| TestCommand);
+    ///     .with_executable(|_| Ok(TestCommand));
     /// ```
     pub fn with_modifier(
         &mut self,

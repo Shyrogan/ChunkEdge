@@ -7,10 +7,11 @@ use bevy_ecs::message::{Message, MessageReader, MessageWriter};
 use bevy_ecs::prelude::{Entity, IntoScheduleConfigs, Resource};
 use chunkedge_server::EventLoopPreUpdate;
 use petgraph::prelude::NodeIndex;
+use tracing::debug;
 
-use crate::graph::CommandGraphBuilder;
+use crate::graph::{CommandGraphBuilder, Executable};
 use crate::modifier_value::ModifierValue;
-use crate::parsers::ParseInput;
+use crate::parsers::{CommandArgParseError, ParseInput};
 use crate::{
     Command, CommandProcessedMessage, CommandRegistry, CommandScopeRegistry, CommandSystemSet,
 };
@@ -21,6 +22,7 @@ where
 {
     fn build(&self, app: &mut App) {
         app.add_message::<CommandResultMessage<T>>()
+            .add_message::<CommandRejectedMessage>()
             .insert_resource(CommandResource::<T>::new())
             .add_systems(PostStartup, command_startup_system::<T>)
             .add_systems(
@@ -57,7 +59,7 @@ where
 #[derive(Resource)]
 struct CommandResource<T: Command + Send + Sync> {
     command: PhantomData<T>,
-    executables: HashMap<NodeIndex, fn(&mut ParseInput) -> T>,
+    executables: HashMap<NodeIndex, Executable<T>>,
 }
 
 impl<T: Command + Send + Sync> CommandResource<T> {
@@ -78,6 +80,17 @@ where
     pub result: T,
     pub executor: Entity,
     pub modifiers: HashMap<ModifierValue, ModifierValue>,
+}
+
+/// Sent when a command reached an executable but its arguments failed to parse,
+/// so no [`CommandResultMessage`] was written. ChunkEdge tells the client
+/// nothing; reporting the error to the player is up to the game.
+#[derive(Message, Debug)]
+pub struct CommandRejectedMessage {
+    pub executor: Entity,
+    /// The arguments the executable failed to parse.
+    pub arguments: String,
+    pub error: CommandArgParseError,
 }
 
 fn command_startup_system<T>(
@@ -109,18 +122,34 @@ fn command_startup_system<T>(
 fn command_message_system<T>(
     mut commands_executed: MessageReader<CommandProcessedMessage>,
     mut messages: MessageWriter<CommandResultMessage<T>>,
+    mut rejected: MessageWriter<CommandRejectedMessage>,
     command: ResMut<CommandResource<T>>,
 ) where
     T: Command + Send + Sync,
 {
     for command_message in commands_executed.read() {
-        if let Some(executable) = command.executables.get(&command_message.node) {
-            let result = executable(&mut ParseInput::new(&command_message.command));
-            messages.write(CommandResultMessage {
-                result,
-                executor: command_message.executor,
-                modifiers: command_message.modifiers.clone(),
-            });
+        let Some(executable) = command.executables.get(&command_message.node) else {
+            continue;
+        };
+        match executable(&mut ParseInput::new(&command_message.command)) {
+            Ok(result) => {
+                messages.write(CommandResultMessage {
+                    result,
+                    executor: command_message.executor,
+                    modifiers: command_message.modifiers.clone(),
+                });
+            }
+            Err(error) => {
+                debug!(
+                    "Rejected command args `{}`: {error}",
+                    command_message.command
+                );
+                rejected.write(CommandRejectedMessage {
+                    executor: command_message.executor,
+                    arguments: command_message.command.clone(),
+                    error,
+                });
+            }
         }
     }
 }

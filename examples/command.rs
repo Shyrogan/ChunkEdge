@@ -7,7 +7,7 @@ use chunkedge::prelude::*;
 use chunkedge::*;
 use chunkedge_server::op_level::OpLevel;
 use command::graph::CommandGraphBuilder;
-use command::handler::CommandResultMessage;
+use command::handler::{CommandRejectedMessage, CommandResultMessage};
 use command::parsers::entity_selector::{EntitySelector, EntitySelectors};
 use command::parsers::{CommandArg, GreedyString, QuotableString};
 use command::scopes::CommandScopes;
@@ -122,14 +122,14 @@ impl Command for ComplexRedirectionCommand {
             .argument("a")
             .with_parser::<Vec3Parser>()
             .with_executable(|input| {
-                ComplexRedirectionCommand::A(Vec3Parser::parse_arg(input).unwrap())
+                Ok(ComplexRedirectionCommand::A(Vec3Parser::parse_arg(input)?))
             });
 
         let b = graph.literal("b").id();
 
         graph
             .at(b)
-            .with_executable(|_| ComplexRedirectionCommand::B);
+            .with_executable(|_| Ok(ComplexRedirectionCommand::B));
         graph.at(b).redirect_to(root);
 
         let c = graph.literal("c").id();
@@ -139,7 +139,7 @@ impl Command for ComplexRedirectionCommand {
             .argument("c")
             .with_parser::<Vec2Parser>()
             .with_executable(|input| {
-                ComplexRedirectionCommand::C(Vec2Parser::parse_arg(input).unwrap())
+                Ok(ComplexRedirectionCommand::C(Vec2Parser::parse_arg(input)?))
             });
 
         let d = graph
@@ -155,7 +155,7 @@ impl Command for ComplexRedirectionCommand {
 
         graph
             .at(d)
-            .with_executable(|_| ComplexRedirectionCommand::D);
+            .with_executable(|_| Ok(ComplexRedirectionCommand::D));
         graph.at(d).redirect_to(command_root);
 
         let e = graph.literal("e").id();
@@ -165,7 +165,7 @@ impl Command for ComplexRedirectionCommand {
             .argument("e")
             .with_parser::<Vec3Parser>()
             .with_executable(|input| {
-                ComplexRedirectionCommand::E(Vec3Parser::parse_arg(input).unwrap())
+                Ok(ComplexRedirectionCommand::E(Vec3Parser::parse_arg(input)?))
             });
     }
 }
@@ -190,6 +190,7 @@ pub fn main() {
                 handle_complex_command,
                 handle_gamemode_command,
                 handle_struct_command,
+                report_rejected_commands,
             ),
         )
         .run();
@@ -407,6 +408,19 @@ fn find_targets(
             let mut client = clients.get_mut(message.executor).unwrap().1;
             client.send_chat_message("complex selector not implemented".to_owned());
             vec![]
+        }
+    }
+}
+
+/// ChunkEdge leaves reporting argument errors to the game. This example shows
+/// them to the player in red.
+fn report_rejected_commands(
+    mut messages: MessageReader<CommandRejectedMessage>,
+    mut clients: Query<&mut Client>,
+) {
+    for message in messages.read() {
+        if let Ok(mut client) = clients.get_mut(message.executor) {
+            client.send_chat_message(message.error.to_string().color(Color::RED));
         }
     }
 }

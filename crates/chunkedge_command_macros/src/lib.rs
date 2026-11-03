@@ -237,7 +237,7 @@ fn process_paths_enum(
                     if executables && i == path.len() - 1 {
                         inner_expansion = quote! {
                             #inner_expansion
-                                .with_executable(|s| #enum_name::#variant_ident{#(#final_executable,)*})
+                                .with_executable(|s| Ok(#enum_name::#variant_ident{#(#final_executable,)*}))
                         };
                     }
                 }
@@ -256,17 +256,17 @@ fn process_paths_enum(
                     };
 
                     final_executable.push(quote! {
-                        #ident: #field_type::parse_arg(s).unwrap()
+                        #ident: #field_type::parse_arg(s)?
                     });
 
                     if i == path.len() - 1 {
                         inner_expansion = quote! {
                             #inner_expansion
-                                .with_executable(|s| {
+                                .with_executable(|s| Ok(
                                     #enum_name::#variant_ident {
                                         #(#final_executable,)*
                                     }
-                                })
+                                ))
                         };
                     }
                 }
@@ -354,13 +354,13 @@ fn process_paths_enum(
 
                     inner_expansion = quote! {
                         let #so_far_ident = {#inner_expansion
-                            .with_executable(|s| {
+                            .with_executable(|s| Ok(
                                 #enum_name::#variant_ident {
                                     #(#final_executable,)*
                                     #ident: None,
                                     #(#next_optional_args: None,)*
                                 }
-                            })
+                            ))
                             .id()};
 
                         command_graph.at(#so_far_ident)
@@ -369,17 +369,17 @@ fn process_paths_enum(
                     };
 
                     final_executable.push(quote! {
-                        #ident: Some(#option_inner::parse_arg(s).unwrap())
+                        #ident: Some(#option_inner::parse_arg(s)?)
                     });
 
                     if i == path.len() - 1 {
                         inner_expansion = quote! {
                             #inner_expansion
-                                .with_executable(|s| {
+                                .with_executable(|s| Ok(
                                     #enum_name::#variant_ident {
                                         #(#final_executable,)*
                                     }
-                                })
+                                ))
                         };
                     }
                 }
@@ -427,7 +427,7 @@ fn process_paths_struct(
                     if i == path.len() - 1 {
                         inner_expansion = quote! {
                             #inner_expansion
-                                .with_executable(|s| #struct_name{#(#final_executable,)*})
+                                .with_executable(|s| Ok(#struct_name{#(#final_executable,)*}))
                         };
                     }
 
@@ -455,17 +455,17 @@ fn process_paths_struct(
                     };
 
                     final_executable.push(quote! {
-                        #ident: #field_type::parse_arg(s).unwrap()
+                        #ident: #field_type::parse_arg(s)?
                     });
 
                     if i == path.len() - 1 {
                         inner_expansion = quote! {
                             #inner_expansion
-                                .with_executable(|s| {
+                                .with_executable(|s| Ok(
                                     #struct_name {
                                         #(#final_executable,)*
                                     }
-                                })
+                                ))
                         };
                     }
 
@@ -562,13 +562,13 @@ fn process_paths_struct(
 
                     inner_expansion = quote! {
                         let #so_far_ident = {#inner_expansion
-                            .with_executable(|s| {
+                            .with_executable(|s| Ok(
                                 #struct_name {
                                     #(#final_executable,)*
                                     #ident: None,
                                     #(#next_optional_args: None,)*
                                 }
-                            })
+                            ))
                             .id()};
 
                         command_graph.at(#so_far_ident)
@@ -577,17 +577,17 @@ fn process_paths_struct(
                     };
 
                     final_executable.push(quote! {
-                        #ident: Some(#option_inner::parse_arg(s).unwrap())
+                        #ident: Some(#option_inner::parse_arg(s)?)
                     });
 
                     if i == path.len() - 1 {
                         inner_expansion = quote! {
                             #inner_expansion
-                                .with_executable(|s| {
+                                .with_executable(|s| Ok(
                                     #struct_name {
                                         #(#final_executable,)*
                                     }
-                                })
+                                ))
                         };
                     }
 
