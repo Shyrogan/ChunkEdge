@@ -144,7 +144,7 @@ pub mod prelude {
     };
     pub use chunkedge_server::client_command::{
         JumpWithHorseMessage, JumpWithHorseState, LeaveBedMessage, PlayerCommand, SneakMessage,
-        SneakState, SprintMessage, SprintState,
+        SneakState, SprintMessage, SprintState, StartFallFlyingMessage,
     };
     pub use chunkedge_server::entity::hitbox::{Hitbox, HitboxShape};
     pub use chunkedge_server::entity::{
