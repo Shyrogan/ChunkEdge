@@ -528326,6 +528326,12 @@
       "translation_key": "block.minecraft.firefly_bush"
     }
   ],
+  "entity_collision_shapes": {
+    "full_block": 1,
+    "powder_snow_falling": 338,
+    "scaffolding_stable": 275,
+    "scaffolding_unstable_bottom": 71
+  },
   "shapes": [
     {
       "max_x": 1.0,
@@ -537951,6 +537957,21 @@
       "y": [
         0.6875,
         0.8125
+      ],
+      "z": [
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "full": "01",
+      "x": [
+        0.0,
+        1.0
+      ],
+      "y": [
+        0.0,
+        0.8999999761581421
       ],
       "z": [
         0.0,
