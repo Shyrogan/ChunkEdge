@@ -5,8 +5,9 @@
 #[cfg(feature = "binary")]
 #[cfg_attr(docsrs, doc(cfg(feature = "binary")))]
 pub use binary::{
-    from_binary, from_network_binary, from_unnamed_binary, from_unnamed_value, to_binary,
-    to_network_binary, to_unnamed_value_binary,
+    NETWORK_NBT_QUOTA, from_binary, from_network_binary, from_network_binary_with_quota,
+    from_unnamed_binary, from_unnamed_binary_with_quota, from_unnamed_value,
+    from_unnamed_value_with_quota, to_binary, to_network_binary, to_unnamed_value_binary,
 };
 pub use compound::Compound;
 pub use error::*;
