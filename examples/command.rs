@@ -7,7 +7,7 @@ use chunkedge::prelude::*;
 use chunkedge::*;
 use chunkedge_server::op_level::OpLevel;
 use command::graph::CommandGraphBuilder;
-use command::handler::CommandResultMessage;
+use command::handler::{CommandRejectedMessage, CommandResultMessage};
 use command::parsers::entity_selector::{EntitySelector, EntitySelectors};
 use command::parsers::{CommandArg, GreedyString, QuotableString};
 use command::scopes::CommandScopes;
@@ -190,6 +190,7 @@ pub fn main() {
                 handle_complex_command,
                 handle_gamemode_command,
                 handle_struct_command,
+                report_rejected_commands,
             ),
         )
         .run();
@@ -407,6 +408,19 @@ fn find_targets(
             let mut client = clients.get_mut(message.executor).unwrap().1;
             client.send_chat_message("complex selector not implemented".to_owned());
             vec![]
+        }
+    }
+}
+
+/// ChunkEdge leaves reporting argument errors to the game. This example shows
+/// them to the player in red.
+fn report_rejected_commands(
+    mut messages: MessageReader<CommandRejectedMessage>,
+    mut clients: Query<&mut Client>,
+) {
+    for message in messages.read() {
+        if let Ok(mut client) = clients.get_mut(message.executor) {
+            client.send_chat_message(message.error.to_string().color(Color::RED));
         }
     }
 }

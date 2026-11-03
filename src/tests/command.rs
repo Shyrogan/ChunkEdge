@@ -11,7 +11,7 @@ use chunkedge_server::keepalive::KeepaliveSettings;
 use chunkedge_server::{ChunkLayer, EntityLayer, Server, ServerSettings};
 
 use crate::command::graph::CommandGraphBuilder;
-use crate::command::handler::CommandResultMessage;
+use crate::command::handler::{CommandRejectedMessage, CommandResultMessage};
 use crate::command::parsers::{CommandArg, CommandArgParseError, GreedyString};
 use crate::command::{AddCommand, Command};
 use crate::command_macros::Command;
@@ -193,27 +193,26 @@ fn malformed_arguments_are_rejected_without_panicking() {
 }
 
 #[test]
-fn executable_parse_error_is_reported_to_the_player() {
+fn executable_parse_error_is_reported_as_a_message() {
     let mut scenario = CommandScenario::new();
 
     let results = scenario.dispatch::<RejectingCommand>("reject not-a-number");
 
     assert_eq!(results, []);
-    let received = scenario.helper.collect_received();
-    received.assert_count::<SystemChatS2c>(1);
-    let chat = received
-        .first::<SystemChatS2c>()
-        .chat
-        .text
-        .to_legacy_lossy();
-    assert!(
-        chat.contains(
-            &CommandArgParseError::InvalidArgument {
-                expected: "integer".to_owned(),
-                got: "not-a-number".to_owned(),
-            }
-            .to_string()
-        ),
-        "unexpected error message: {chat}"
-    );
+    let messages = scenario
+        .app
+        .world()
+        .resource::<Messages<CommandRejectedMessage>>();
+    let rejected: Vec<_> = messages.iter_current_update_messages().collect();
+    assert_eq!(rejected.len(), 1);
+    assert_eq!(rejected[0].arguments, "not-a-number");
+    assert!(matches!(
+        &rejected[0].error,
+        CommandArgParseError::InvalidArgument { expected, got }
+            if expected == "integer" && got == "not-a-number"
+    ));
+    scenario
+        .helper
+        .collect_received()
+        .assert_count::<SystemChatS2c>(0);
 }

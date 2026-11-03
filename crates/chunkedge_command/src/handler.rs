@@ -4,17 +4,14 @@ use std::marker::PhantomData;
 use bevy_app::{App, Plugin, PostStartup};
 use bevy_ecs::change_detection::ResMut;
 use bevy_ecs::message::{Message, MessageReader, MessageWriter};
-use bevy_ecs::prelude::{Entity, IntoScheduleConfigs, Query, Resource};
+use bevy_ecs::prelude::{Entity, IntoScheduleConfigs, Resource};
 use chunkedge_server::EventLoopPreUpdate;
-use chunkedge_server::client::Client;
-use chunkedge_server::message::SendMessage;
-use chunkedge_text::{Color, IntoText};
 use petgraph::prelude::NodeIndex;
 use tracing::debug;
 
 use crate::graph::{CommandGraphBuilder, Executable};
 use crate::modifier_value::ModifierValue;
-use crate::parsers::ParseInput;
+use crate::parsers::{CommandArgParseError, ParseInput};
 use crate::{
     Command, CommandProcessedMessage, CommandRegistry, CommandScopeRegistry, CommandSystemSet,
 };
@@ -25,6 +22,7 @@ where
 {
     fn build(&self, app: &mut App) {
         app.add_message::<CommandResultMessage<T>>()
+            .add_message::<CommandRejectedMessage>()
             .insert_resource(CommandResource::<T>::new())
             .add_systems(PostStartup, command_startup_system::<T>)
             .add_systems(
@@ -84,6 +82,17 @@ where
     pub modifiers: HashMap<ModifierValue, ModifierValue>,
 }
 
+/// Sent when a command reached an executable but its arguments failed to parse,
+/// so no [`CommandResultMessage`] was written. ChunkEdge tells the client
+/// nothing; reporting the error to the player is up to the game.
+#[derive(Message, Debug)]
+pub struct CommandRejectedMessage {
+    pub executor: Entity,
+    /// The arguments the executable failed to parse.
+    pub arguments: String,
+    pub error: CommandArgParseError,
+}
+
 fn command_startup_system<T>(
     mut registry: ResMut<CommandRegistry>,
     mut scope_registry: ResMut<CommandScopeRegistry>,
@@ -113,8 +122,8 @@ fn command_startup_system<T>(
 fn command_message_system<T>(
     mut commands_executed: MessageReader<CommandProcessedMessage>,
     mut messages: MessageWriter<CommandResultMessage<T>>,
+    mut rejected: MessageWriter<CommandRejectedMessage>,
     command: ResMut<CommandResource<T>>,
-    mut clients: Query<&mut Client>,
 ) where
     T: Command + Send + Sync,
 {
@@ -130,11 +139,16 @@ fn command_message_system<T>(
                     modifiers: command_message.modifiers.clone(),
                 });
             }
-            Err(err) => {
-                debug!("Rejected command args `{}`: {err}", command_message.command);
-                if let Ok(mut client) = clients.get_mut(command_message.executor) {
-                    client.send_chat_message(err.to_string().color(Color::RED));
-                }
+            Err(error) => {
+                debug!(
+                    "Rejected command args `{}`: {error}",
+                    command_message.command
+                );
+                rejected.write(CommandRejectedMessage {
+                    executor: command_message.executor,
+                    arguments: command_message.command.clone(),
+                    error,
+                });
             }
         }
     }
